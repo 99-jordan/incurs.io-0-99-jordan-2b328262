@@ -53,8 +53,6 @@ export default function Home() {
   const [showConsentBanner, setShowConsentBanner] = useState(false)
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
 
-  const currentChat = chats.find((c) => c.id === currentChatId)
-
   // Create transport with memoization
   const transport = useMemo(
     () => new DefaultChatTransport({ api: "/api/triage" }),
@@ -129,18 +127,23 @@ export default function Home() {
 
   // Load chats and memory on mount
   useEffect(() => {
+    console.log("[v0] Component mounting...")
     setMounted(true)
     
-    // Check GDPR consent first
+    // Check GDPR consent
     const storedConsent = getConsent()
+    console.log("[v0] Stored consent:", storedConsent)
     setConsent(storedConsent)
     
-    if (!hasValidConsent()) {
+    // Show banner if no valid consent
+    const valid = hasValidConsent()
+    console.log("[v0] Has valid consent:", valid)
+    if (!valid) {
       setShowConsentBanner(true)
-      return
+      // Still load the app, just show banner overlay
     }
     
-    // Enforce data retention policy (90 days)
+    // Load data regardless (user can see app behind banner)
     enforceDataRetention(90)
     
     const loadedChats = getChats()
@@ -271,7 +274,17 @@ export default function Home() {
   }, [])
 
   const handleDeclineConsent = useCallback(() => {
-    // User declined - show a message that the app requires consent
+    // User declined - accept minimal consent (essential only)
+    const minimalConsent: GDPRConsent = {
+      version: "1.0",
+      essential: true,
+      analytics: false,
+      aiProcessing: true, // Required for app to work
+      memoryStorage: false,
+      timestamp: new Date(),
+    }
+    saveConsent(minimalConsent)
+    setConsent(minimalConsent)
     setShowConsentBanner(false)
   }, [])
 
@@ -323,7 +336,7 @@ export default function Home() {
 
   return (
     <>
-      {/* GDPR Consent Banner */}
+      {/* GDPR Consent Banner - overlay on top */}
       {showConsentBanner && (
         <ConsentBanner onAccept={handleAcceptConsent} onDecline={handleDeclineConsent} />
       )}
@@ -337,36 +350,34 @@ export default function Home() {
         onDataDeleted={handleDataDeleted}
       />
 
-      {/* Main App - only show if consent is valid */}
-      {!showConsentBanner && (
-        <div className="flex h-screen bg-background">
-          {/* Sidebar */}
-          <ChatSidebar
-            chats={chats}
-            currentChatId={currentChatId}
-            onSelectChat={handleSelectChat}
-            onNewChat={handleNewChat}
-            onDeleteChat={handleDeleteChat}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-            onOpenPrivacySettings={() => setShowPrivacySettings(true)}
-          />
+      {/* Main App - always render, consent banner is an overlay */}
+      <div className="flex h-screen bg-background">
+        {/* Sidebar */}
+        <ChatSidebar
+          chats={chats}
+          currentChatId={currentChatId}
+          onSelectChat={handleSelectChat}
+          onNewChat={handleNewChat}
+          onDeleteChat={handleDeleteChat}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onOpenPrivacySettings={() => setShowPrivacySettings(true)}
+        />
 
-          {/* Main Chat Area */}
-          <div className="flex flex-1 flex-col">
-            <ChatArea messages={displayMessages} isLoading={isLoading} streamingContent={streamingContent} />
-            <ChatInput onSend={handleSendMessage} onStop={stop} isLoading={isLoading} />
-          </div>
-
-          {/* Memory Panel */}
-          <MemoryPanel
-            memory={memory}
-            onClearMemory={handleClearMemory}
-            collapsed={memoryCollapsed}
-            onToggleCollapse={() => setMemoryCollapsed(!memoryCollapsed)}
-          />
+        {/* Main Chat Area */}
+        <div className="flex flex-1 flex-col">
+          <ChatArea messages={displayMessages} isLoading={isLoading} streamingContent={streamingContent} />
+          <ChatInput onSend={handleSendMessage} onStop={stop} isLoading={isLoading} />
         </div>
-      )}
+
+        {/* Memory Panel */}
+        <MemoryPanel
+          memory={memory}
+          onClearMemory={handleClearMemory}
+          collapsed={memoryCollapsed}
+          onToggleCollapse={() => setMemoryCollapsed(!memoryCollapsed)}
+        />
+      </div>
     </>
   )
 }
