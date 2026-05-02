@@ -1,151 +1,273 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { TriageAnswers, Diagnosis, AgentAnalysis, TriageStep } from '@/lib/types'
-import { generateDiagnosis, getAgentAnalyses } from '@/lib/diagnosis-engine'
-import { TriagePanel } from '@/components/triage-panel'
-import { DiagnosisBoard } from '@/components/diagnosis-board'
-import { Button } from '@/components/ui/button'
-import { RotateCcw } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { useChat } from "@ai-sdk/react"
+import { DefaultChatTransport, UIMessage } from "ai"
+import type { Chat, Message, ArmourMemory } from "@/lib/types"
+import { getChats, saveChats, createChat, updateChatTitle, getMemory, saveMemory, clearMemory } from "@/lib/chat-store"
+import { ChatSidebar } from "@/components/chat-sidebar"
+import { ChatArea } from "@/components/chat-area"
+import { ChatInput } from "@/components/chat-input"
+import { MemoryPanel } from "@/components/memory-panel"
 
-const defaultAgentAnalyses: AgentAnalysis[] = [
-  { agent: 'Goal Agent', icon: '🎯', status: 'analysing', finding: '', severity: 'low' },
-  { agent: 'Reality Agent', icon: '🔍', status: 'analysing', finding: '', severity: 'low' },
-  { agent: 'Skill Agent', icon: '⚡', status: 'analysing', finding: '', severity: 'low' },
-  { agent: 'Resource Agent', icon: '📚', status: 'analysing', finding: '', severity: 'low' },
-  { agent: 'CEO Agent', icon: '👔', status: 'analysing', finding: '', severity: 'low' }
-]
+// Helper to extract text from UIMessage parts
+function getUIMessageText(msg: UIMessage): string {
+  if (!msg.parts || !Array.isArray(msg.parts)) return ""
+  return msg.parts
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((p) => p.text)
+    .join("")
+}
+
+// Convert UIMessage to our Message format
+function uiMessageToMessage(msg: UIMessage): Message {
+  return {
+    id: msg.id,
+    role: msg.role as "user" | "assistant",
+    content: getUIMessageText(msg),
+    timestamp: new Date(),
+  }
+}
 
 export default function Home() {
-  const [currentStep, setCurrentStep] = useState<TriageStep>(0)
-  const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null)
-  const [agentAnalyses, setAgentAnalyses] = useState<AgentAnalysis[]>(defaultAgentAnalyses)
-  const [showIntro, setShowIntro] = useState(true)
+  const [chats, setChats] = useState<Chat[]>([])
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
+  const [memory, setMemory] = useState<ArmourMemory>({
+    knownGoal: null,
+    repeatedBottleneck: null,
+    currentAdvantage: null,
+    currentRisk: null,
+    lastCommitment: null,
+    proofOfAction: null,
+    lessonLearned: null,
+    nextCheckInQuestion: null,
+    updatedAt: null,
+  })
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [memoryCollapsed, setMemoryCollapsed] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
-  const handleTriageComplete = (answers: TriageAnswers) => {
-    const newDiagnosis = generateDiagnosis(answers)
-    const analyses = getAgentAnalyses(answers)
-    setDiagnosis(newDiagnosis)
-    setAgentAnalyses(analyses)
-  }
+  const currentChat = chats.find((c) => c.id === currentChatId)
 
-  const handleReset = () => {
-    setCurrentStep(0)
-    setDiagnosis(null)
-    setAgentAnalyses(defaultAgentAnalyses)
-    setShowIntro(true)
-  }
+  // Create transport with memoization
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: "/api/triage" }),
+    []
+  )
 
-  const handleStart = () => {
-    setShowIntro(false)
-  }
+  // AI chat hook with AI SDK 6 patterns
+  const { messages, status, sendMessage, stop } = useChat({
+    id: currentChatId || undefined,
+    transport,
+  })
 
-  // Intro screen
-  if (showIntro) {
+  const isLoading = status === "streaming" || status === "submitted"
+
+  // Extract memory from triage results
+  const extractAndSaveMemory = useCallback((content: string) => {
+    const triageMatch = content.match(/<triage>([\s\S]*?)<\/triage>/)
+    if (triageMatch) {
+      try {
+        const triageData = JSON.parse(triageMatch[1])
+        setMemory((prev) => {
+          const newMemory: ArmourMemory = {
+            ...prev,
+            knownGoal: triageData.primaryBottleneck ? prev.knownGoal : null,
+            repeatedBottleneck: triageData.primaryBottleneck || prev.repeatedBottleneck,
+            currentAdvantage: triageData.currentAdvantage || prev.currentAdvantage,
+            currentRisk: triageData.riskIfUnchanged || prev.currentRisk,
+            lastCommitment: triageData.next24HourMove || prev.lastCommitment,
+            proofOfAction: triageData.proofOfAction || prev.proofOfAction,
+            lessonLearned: triageData.memoryUpdate || prev.lessonLearned,
+            nextCheckInQuestion: "Did you complete your 24-hour move?",
+            updatedAt: new Date(),
+          }
+          saveMemory(newMemory)
+          return newMemory
+        })
+      } catch {
+        // Ignore parsing errors
+      }
+    }
+  }, [])
+
+  // Sync messages to chat when they change
+  useEffect(() => {
+    if (currentChatId && messages.length > 0) {
+      const convertedMessages = messages.map(uiMessageToMessage)
+      
+      setChats((prev) => {
+        const updated = prev.map((chat) => {
+          if (chat.id === currentChatId) {
+            return {
+              ...chat,
+              messages: convertedMessages,
+              title: updateChatTitle({ ...chat, messages: convertedMessages }),
+              updatedAt: new Date(),
+            }
+          }
+          return chat
+        })
+        saveChats(updated)
+        return updated
+      })
+
+      // Check for memory updates in the last assistant message
+      const lastMessage = messages[messages.length - 1]
+      if (lastMessage?.role === "assistant") {
+        const content = getUIMessageText(lastMessage)
+        extractAndSaveMemory(content)
+      }
+    }
+  }, [messages, currentChatId, extractAndSaveMemory])
+
+  // Load chats and memory on mount
+  useEffect(() => {
+    setMounted(true)
+    const loadedChats = getChats()
+    const loadedMemory = getMemory()
+    setChats(loadedChats)
+    setMemory(loadedMemory)
+
+    // Select most recent chat or create new one
+    if (loadedChats.length > 0) {
+      const sorted = [...loadedChats].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      setCurrentChatId(sorted[0].id)
+    }
+  }, [])
+
+  const handleNewChat = useCallback(() => {
+    const newChat = createChat()
+    setChats((prev) => {
+      const updated = [newChat, ...prev]
+      saveChats(updated)
+      return updated
+    })
+    setCurrentChatId(newChat.id)
+  }, [])
+
+  const handleSelectChat = useCallback((chatId: string) => {
+    setCurrentChatId(chatId)
+  }, [])
+
+  const handleDeleteChat = useCallback(
+    (chatId: string) => {
+      setChats((prev) => {
+        const updated = prev.filter((c) => c.id !== chatId)
+        saveChats(updated)
+        return updated
+      })
+      if (currentChatId === chatId) {
+        const remaining = chats.filter((c) => c.id !== chatId)
+        if (remaining.length > 0) {
+          setCurrentChatId(remaining[0].id)
+        } else {
+          setCurrentChatId(null)
+        }
+      }
+    },
+    [currentChatId, chats]
+  )
+
+  const handleSendMessage = useCallback(
+    async (content: string) => {
+      // Create new chat if none selected
+      if (!currentChatId) {
+        const newChat = createChat()
+        const userMessage: Message = {
+          id: crypto.randomUUID(),
+          role: "user",
+          content,
+          timestamp: new Date(),
+        }
+        newChat.messages = [userMessage]
+        newChat.title = content.length > 40 ? content.slice(0, 40) + "..." : content
+        newChat.updatedAt = new Date()
+
+        setChats((prev) => {
+          const updated = [newChat, ...prev]
+          saveChats(updated)
+          return updated
+        })
+        setCurrentChatId(newChat.id)
+      }
+
+      // Send to AI using AI SDK 6 pattern
+      sendMessage({ text: content })
+    },
+    [currentChatId, sendMessage]
+  )
+
+  const handleClearMemory = useCallback(() => {
+    clearMemory()
+    setMemory({
+      knownGoal: null,
+      repeatedBottleneck: null,
+      currentAdvantage: null,
+      currentRisk: null,
+      lastCommitment: null,
+      proofOfAction: null,
+      lessonLearned: null,
+      nextCheckInQuestion: null,
+      updatedAt: null,
+    })
+  }, [])
+
+  // Get streaming content from the last assistant message if loading
+  const streamingContent = useMemo(() => {
+    if (isLoading && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1]
+      if (lastMessage.role === "assistant") {
+        return getUIMessageText(lastMessage)
+      }
+    }
+    return ""
+  }, [isLoading, messages])
+
+  // Convert UIMessages to our Message format for display
+  const displayMessages: Message[] = useMemo(() => {
+    return messages.map(uiMessageToMessage)
+  }, [messages])
+
+  if (!mounted) {
     return (
-      <main className="min-h-screen bg-background flex items-center justify-center p-6">
-        <div className="max-w-2xl text-center">
-          <div className="mb-8">
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-4">
-              incurs<span className="text-accent">.</span>io
-            </h1>
-            <p className="text-xl text-muted-foreground">
-              Adaptive armour for ambition
-            </p>
-          </div>
-
-          <div className="space-y-6 mb-12">
-            <p className="text-lg text-foreground/80 leading-relaxed text-balance">
-              Most personal development tools give motivation or generic plans. 
-              We diagnose the real bottleneck first.
-            </p>
-            
-            <div className="flex flex-wrap justify-center gap-3 text-sm text-muted-foreground">
-              <span className="px-3 py-1 bg-secondary rounded-full">Sales Readiness</span>
-              <span className="px-3 py-1 bg-secondary rounded-full">Skill Coverage</span>
-              <span className="px-3 py-1 bg-secondary rounded-full">Execution Capacity</span>
-              <span className="px-3 py-1 bg-secondary rounded-full">Confidence</span>
-              <span className="px-3 py-1 bg-secondary rounded-full">Market Validation</span>
-              <span className="px-3 py-1 bg-secondary rounded-full">Support Network</span>
-              <span className="px-3 py-1 bg-secondary rounded-full">Follow-Through</span>
-            </div>
-
-            <p className="text-muted-foreground">
-              Five specialist agents analyse you from different angles. 
-              The CEO Agent makes one final decision: your next move.
-            </p>
-          </div>
-
-          <Button
-            onClick={handleStart}
-            size="lg"
-            className="bg-foreground text-background hover:bg-foreground/90 px-8"
-          >
-            Begin Triage
-          </Button>
-
-          <p className="mt-8 text-xs text-muted-foreground">
-            incurs.io does not help people dream. It audits whether they can execute.
-          </p>
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <h1 className="mb-2 font-mono text-2xl font-bold tracking-tight">
+            incurs<span className="text-accent">.</span>io
+          </h1>
+          <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
-      </main>
+      </div>
     )
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="h-14 border-b border-border px-6 flex items-center justify-between bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-bold tracking-tight">
-            incurs<span className="text-accent">.</span>io
-          </h1>
-          <span className="text-xs text-muted-foreground hidden sm:block">
-            Adaptive armour for ambition
-          </span>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          {currentStep === 5 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleReset}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              New Triage
-            </Button>
-          )}
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-success" />
-            <span className="text-xs text-muted-foreground">
-              {currentStep === 5 ? 'Diagnosis Complete' : 'Triage Active'}
-            </span>
-          </div>
-        </div>
-      </header>
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <ChatSidebar
+        chats={chats}
+        currentChatId={currentChatId}
+        onSelectChat={handleSelectChat}
+        onNewChat={handleNewChat}
+        onDeleteChat={handleDeleteChat}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
 
-      {/* Main Content */}
-      <div className="flex flex-col lg:flex-row h-[calc(100vh-3.5rem)]">
-        {/* Left Panel - Triage */}
-        <div className="w-full lg:w-1/2 xl:w-2/5 border-r border-border p-6 lg:p-8 overflow-auto">
-          <TriagePanel
-            onComplete={handleTriageComplete}
-            currentStep={currentStep}
-            onStepChange={setCurrentStep}
-          />
-        </div>
-
-        {/* Right Panel - Diagnosis Board */}
-        <div className="w-full lg:w-1/2 xl:w-3/5 bg-secondary/20 overflow-hidden">
-          <DiagnosisBoard
-            diagnosis={diagnosis}
-            agentAnalyses={agentAnalyses}
-            currentStep={currentStep}
-          />
-        </div>
+      {/* Main Chat Area */}
+      <div className="flex flex-1 flex-col">
+        <ChatArea messages={displayMessages} isLoading={isLoading} streamingContent={streamingContent} />
+        <ChatInput onSend={handleSendMessage} onStop={stop} isLoading={isLoading} />
       </div>
-    </main>
+
+      {/* Memory Panel */}
+      <MemoryPanel
+        memory={memory}
+        onClearMemory={handleClearMemory}
+        collapsed={memoryCollapsed}
+        onToggleCollapse={() => setMemoryCollapsed(!memoryCollapsed)}
+      />
+    </div>
   )
 }
