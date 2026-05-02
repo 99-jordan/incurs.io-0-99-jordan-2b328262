@@ -5,15 +5,30 @@ function seededDailyIntel(input: {
 }) {
   const localArea = input.localArea || "London"
   const bottleneck = input.primaryBottleneck || "sales readiness"
+  const now = new Date()
+  const displayDate = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "Europe/London",
+  }).format(now)
+  const searchIntents = [
+    `${localArea} founder events this week`,
+    `${localArea} small business networking ${displayDate}`,
+    `${localArea} customer discovery startup meetup`,
+    `${localArea} local business owners networking`,
+  ]
 
   return {
-    recommendedEvent: `${localArea} founder or small business networking event`,
+    recommendedEvent: `${localArea} founder, startup, or small business networking event this week`,
     recommendedBook: "The Mom Test by Rob Fitzpatrick",
     recommendedVideo: "A practical customer discovery interview walkthrough for startup founders",
     recommendedDeepDive: "Customer discovery scripts, objection logs and cold outreach teardown examples",
-    recommendedOpportunity: "Research five local service businesses with visible workflow bottlenecks and ask for one short discovery call.",
+    recommendedOpportunity: `Search today for "${searchIntents[0]}" and shortlist three rooms where buyers or operators actually attend.`,
     whyTheseMatch: `These resources point at ${bottleneck}: more buyer exposure, less private planning, and faster proof from the market.`,
-    sources: [],
+    searchIntents,
+    localTimeContext: displayDate,
+    sources: searchIntents.map((query) => ({ title: query, url: `https://www.google.com/search?q=${encodeURIComponent(query)}` })),
     lastRefreshed: new Date().toISOString(),
     sourceMode: "fallback" as const,
     refreshMethod: "manual" as const,

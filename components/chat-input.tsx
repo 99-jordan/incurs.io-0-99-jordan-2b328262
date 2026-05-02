@@ -44,7 +44,7 @@ export function ChatInput({ onSend, onStop, isLoading, placeholder }: ChatInputP
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder || "What are you trying to build, change, or achieve?"}
+            placeholder={placeholder || "Start with the messy goal. What are you trying to build, change, or achieve?"}
             rows={1}
             className="max-h-[200px] min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none"
             disabled={isLoading}
@@ -69,7 +69,7 @@ export function ChatInput({ onSend, onStop, isLoading, placeholder }: ChatInputP
           )}
         </div>
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          incurs.io diagnoses bottlenecks and gives one practical next move. Press Enter to send.
+          Answer naturally. incurs.io will ask one sharp question at a time.
         </p>
       </div>
     </div>

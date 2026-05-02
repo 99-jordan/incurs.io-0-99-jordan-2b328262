@@ -5,6 +5,7 @@ export const TRIAGE_AREAS = [
   "existing skills and advantages",
   "weakest skill, behaviour or resource",
   "available focused hours",
+  "location for local opportunities",
   "uncomfortable action being avoided",
 ] as const
 
@@ -56,6 +57,10 @@ export function buildDemoTriageResult(input: {
   const hasOutreachAvoidance = /cold|outreach|selling|sales|hearing no|rejection|buyer conversation/.test(combined)
   const hoursMatch = combined.match(/(\d+)\s*(focused\s*)?(hours|hrs)/)
   const focusedHours = hoursMatch ? Number(hoursMatch[1]) : 6
+  const location =
+    input.localArea ||
+    answers.find((answer) => /\b(london|manchester|birmingham|bristol|leeds|glasgow|edinburgh|cardiff)\b/i.test(answer)) ||
+    "your local area"
 
   const primaryBottleneck =
     isBusinessGoal && (hasOutreachAvoidance || combined.includes("sales")) ? "sales readiness" : "execution capacity"
@@ -84,15 +89,14 @@ export function buildDemoTriageResult(input: {
       supportNetwork: combined.includes("network") || combined.includes("support") ? 6 : 4,
       followThroughRisk: focusedHours >= 10 ? 5 : 7,
     },
-    goalAgentDiagnosis: `The goal is serious enough to matter, but the success condition needs proof from the outside world: ${goal}`,
+    goalAgentDiagnosis: `Clear ambition: ${goal}`,
     realityAgentDiagnosis: isBusinessGoal
       ? "The missing evidence is buyer exposure, not another product feature."
       : "The missing evidence is repeated action under ordinary pressure.",
     skillAgentDiagnosis: isBusinessGoal
       ? "Technical skill is not the constraint. Sales confidence, outreach rhythm and rejection tolerance are."
       : "The constraint is less about knowledge and more about protected time, stamina and follow through.",
-    resourceAgentRecommendation:
-      "Use resources only to support action. Read or watch enough to improve the next conversation, then act.",
+    resourceAgentRecommendation: `Use resources to create buyer exposure in ${location}, not to delay outreach.`,
     ceoFinalDecision: isBusinessGoal
       ? "Stop building in private. Speak to real buyers before you add another feature."
       : "Stop redesigning the system. Prove the habit with one visible action each day.",
@@ -123,13 +127,13 @@ export function buildDemoTriageResult(input: {
       ? "A customer discovery interview walkthrough for early-stage founders"
       : "A practical consistency and habit design breakdown",
     recommendedEventType: isBusinessGoal
-      ? `${input.localArea || "Local"} founder or small business networking event`
-      : `${input.localArea || "Local"} accountability, training or peer execution group`,
+      ? `${location} founder or small business networking event this week`
+      : `${location} accountability, training or peer execution group this week`,
     recommendedDeepDive: isBusinessGoal
       ? "Customer discovery interview scripts and cold outreach teardown examples"
       : "Behaviour design notes on triggers, friction and commitment proof",
     messageTemplate:
-      "Hi [Name], I am testing a small AI workflow idea for [specific business type]. Could I ask you three questions about where work gets stuck? No pitch unless it is useful.",
+      "Hi [Name], I am testing a small AI workflow idea for [business type]. Could I ask three questions about missed calls or booking friction? No pitch unless it is useful.",
     proofOfAction: isBusinessGoal
       ? "A screenshot or log showing three outreach messages sent and one buyer conversation requested."
       : "A timestamped note showing the action completed and what made it harder than expected.",
@@ -177,6 +181,14 @@ export function buildDemoAssistantReply(messages: Array<{ role?: string; parts?:
     return [
       "That is enough capacity to create proof, if the hours are protected from tinkering.",
       "",
+      "Where are you based? I need the local signal before I recommend events or opportunities.",
+    ].join("\n")
+  }
+
+  if (turn === 5) {
+    return [
+      "Good. Local context matters because your next move needs real people, not generic advice.",
+      "",
       "What action are you avoiding because it feels uncomfortable?",
     ].join("\n")
   }
@@ -185,10 +197,10 @@ export function buildDemoAssistantReply(messages: Array<{ role?: string; parts?:
   return [
     "Running triage agents...",
     "",
-    "The pattern is clear enough now. The issue is not ambition. It is where execution meets rejection risk.",
+    "The signal is clean: this is not an information problem. It is a proof problem.",
     "",
     `<triage>${JSON.stringify(result)}</triage>`,
     "",
-    `CEO decision: ${result.ceoFinalDecision}`,
+    "Ready to commit to the 24-hour move?",
   ].join("\n")
 }

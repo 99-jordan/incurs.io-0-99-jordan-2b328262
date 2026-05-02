@@ -1,9 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { TriageResult } from "@/lib/types"
 import {
   AlertTriangle,
@@ -18,6 +16,7 @@ import {
   Brain,
   Search,
   Crown,
+  Shield,
 } from "lucide-react"
 
 interface TriageCardProps {
@@ -25,7 +24,6 @@ interface TriageCardProps {
 }
 
 export function TriageCard({ result }: TriageCardProps) {
-  const [activeTab, setActiveTab] = useState("diagnosis")
   const scoreRows = Object.entries(result.bottleneckScores ?? {}).map(([key, score]) => ({
     key,
     score,
@@ -45,235 +43,191 @@ export function TriageCard({ result }: TriageCardProps) {
   }
 
   return (
-    <Card className="w-full border-accent/20 bg-card">
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-accent" />
-          <CardTitle className="text-base font-medium">CEO Diagnosis</CardTitle>
+    <Card className="w-full overflow-hidden border-accent/25 bg-card shadow-2xl shadow-black/20">
+      <div className="border-b border-border bg-gradient-to-r from-accent/15 via-card to-card px-5 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Crown className="h-5 w-5 text-accent" />
+              <p className="font-mono text-xs font-medium uppercase tracking-[0.24em] text-accent">
+                CEO Decision
+              </p>
+            </div>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight">{result.primaryBottleneck}</h2>
+          </div>
+          <Badge variant="outline" className="border-accent/40 bg-accent/10 text-accent">
+            {result.aiMode === "live" ? "Live triage" : "Demo triage"}
+          </Badge>
         </div>
-      </CardHeader>
-      <CardContent>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-4 w-full">
-            <TabsTrigger value="diagnosis" className="flex-1">
-              Diagnosis
-            </TabsTrigger>
-            <TabsTrigger value="action" className="flex-1">
-              CEO Move
-            </TabsTrigger>
-            <TabsTrigger value="resources" className="flex-1">
-              Resources
-            </TabsTrigger>
-          </TabsList>
+      </div>
 
-          <TabsContent value="diagnosis" className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-start gap-3 rounded-md bg-destructive/10 p-3">
-                <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Primary Bottleneck
-                  </p>
-                  <p className="text-sm font-medium">{result.primaryBottleneck}</p>
-                </div>
-              </div>
+      <CardContent className="space-y-5 p-5">
+        <section className="rounded-xl border border-accent/30 bg-accent/10 p-4">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-accent">
+            Final call
+          </p>
+          <p className="mt-2 text-base font-semibold leading-relaxed">{result.ceoFinalDecision}</p>
+        </section>
 
-              <div className="flex items-start gap-3 rounded-md bg-warning/10 p-3">
-                <Target className="mt-0.5 h-4 w-4 text-warning" />
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Secondary Bottleneck
-                  </p>
-                  <p className="text-sm font-medium">{result.secondaryBottleneck}</p>
-                </div>
-              </div>
+        <section className="grid gap-3 sm:grid-cols-3">
+          <SignalCard icon={AlertTriangle} label="Hidden obstacle" value={result.hiddenObstacle} tone="danger" />
+          <SignalCard icon={Target} label="Secondary risk" value={result.secondaryBottleneck} tone="warning" />
+          <SignalCard icon={Shield} label="Current advantage" value={result.currentAdvantage} tone="success" />
+        </section>
 
-              <div className="flex items-start gap-3 rounded-md bg-secondary p-3">
-                <Zap className="mt-0.5 h-4 w-4 text-accent" />
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Hidden Obstacle
-                  </p>
-                  <p className="text-sm">{result.hiddenObstacle}</p>
-                </div>
-              </div>
-            </div>
+        <section className="grid gap-3 rounded-xl border border-border bg-secondary/30 p-3 sm:grid-cols-5">
+          <AgentSignal name="Goal" identity="Clarifier" value={result.goalAgentDiagnosis} />
+          <AgentSignal name="Reality" identity="Truth Teller" value={result.realityAgentDiagnosis} />
+          <AgentSignal name="Skill" identity="Capability Auditor" value={result.skillAgentDiagnosis} />
+          <AgentSignal name="Resource" identity="Quartermaster" value={result.resourceAgentRecommendation} />
+          <AgentSignal name="CEO" identity="Final Decision Maker" value={result.ceoFinalDecision} />
+        </section>
 
-            {scoreRows.length > 0 && (
-              <div className="space-y-2 pt-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Bottleneck Map
-                </p>
-                <div className="grid gap-2">
-                  {scoreRows.map((score) => (
-                    <div key={score.key} className="flex items-center gap-3">
-                      <span className="w-36 text-xs text-muted-foreground">{score.label}</span>
-                      <div className="h-2 flex-1 rounded-full bg-secondary">
-                        <div
-                          className={`h-full rounded-full transition-all ${getScoreBarColor(score.score)}`}
-                          style={{ width: `${score.score * 10}%` }}
-                        />
-                      </div>
-                      <span className={`w-6 text-right text-xs font-medium ${getScoreColor(score.score)}`}>
-                        {score.score}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Advantage and risk */}
-            <div className="grid gap-3 pt-2 sm:grid-cols-2">
-              <div className="rounded-md bg-chart-1/10 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Current Advantage
-                </p>
-                <p className="mt-1 text-sm">{result.currentAdvantage}</p>
-              </div>
-              <div className="rounded-md bg-destructive/10 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Risk if Unchanged
-                </p>
-                <p className="mt-1 text-sm">{result.riskIfUnchanged}</p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 pt-2">
-              <div className="rounded-md border border-border bg-secondary/40 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Agent Notes</p>
-                <div className="mt-2 space-y-2 text-sm">
-                  <p><span className="text-muted-foreground">Goal:</span> {result.goalAgentDiagnosis}</p>
-                  <p><span className="text-muted-foreground">Reality:</span> {result.realityAgentDiagnosis}</p>
-                  <p><span className="text-muted-foreground">Skill:</span> {result.skillAgentDiagnosis}</p>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="action" className="space-y-4">
-            <div className="rounded-md border border-accent/40 bg-accent/10 p-4">
-              <div className="flex items-center gap-2">
-                <Crown className="h-4 w-4 text-accent" />
-                <p className="text-xs font-medium uppercase tracking-wide text-accent">CEO Final Decision</p>
-              </div>
-              <p className="mt-2 font-medium">{result.ceoFinalDecision}</p>
-            </div>
-
-            <div className="rounded-md border border-accent/30 bg-accent/5 p-4">
+        <section className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+          <div className="space-y-3">
+            <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-accent" />
-                <p className="text-xs font-medium uppercase tracking-wide text-accent">Next 24 Hours</p>
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                  Next 24 hours
+                </p>
               </div>
-              <p className="mt-2 font-medium">{result.next24HourMove}</p>
+              <p className="mt-2 text-sm font-medium">{result.next24HourMove}</p>
             </div>
 
-            {result.sevenDayPlan && result.sevenDayPlan.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  7-Day Plan
-                </p>
-                <div className="space-y-2">
-                  {result.sevenDayPlan.map((step, i) => (
-                    <div key={i} className="flex items-start gap-3 rounded-md bg-secondary p-3">
-                      <Badge variant="outline" className="shrink-0">
-                        {i + 1}
-                      </Badge>
-                      <p className="text-sm">{step}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {result.messageTemplate && (
-              <div className="space-y-2">
+              <div className="rounded-xl border border-border bg-secondary/40 p-4">
                 <div className="flex items-center gap-2">
                   <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Message Template
+                  <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                    Short message
                   </p>
                 </div>
-                <div className="rounded-md bg-secondary p-3">
-                  <p className="font-mono text-sm">{result.messageTemplate}</p>
-                </div>
+                <p className="mt-2 text-sm leading-relaxed">{result.messageTemplate}</p>
               </div>
             )}
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-start gap-3 rounded-md bg-chart-1/10 p-3">
-                <CheckCircle className="mt-0.5 h-4 w-4 text-chart-1" />
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Proof of Action
-                  </p>
-                  <p className="mt-1 text-sm">{result.proofOfAction}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-md bg-destructive/10 p-3">
-                <XCircle className="mt-0.5 h-4 w-4 text-destructive" />
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Stop Doing
-                  </p>
-                  <p className="mt-1 text-sm">{result.stopDoing}</p>
-                </div>
-              </div>
+              <SignalCard icon={CheckCircle} label="Proof" value={result.proofOfAction} tone="success" />
+              <SignalCard icon={XCircle} label="Stop doing" value={result.stopDoing} tone="danger" />
             </div>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="resources" className="space-y-4">
-            <div className="rounded-md border border-border bg-secondary/40 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Resource Agent
+          {scoreRows.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                Bottleneck map
               </p>
-              <p className="mt-1 text-sm">{result.resourceAgentRecommendation}</p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-start gap-3 rounded-md bg-secondary p-3">
-                <BookOpen className="mt-0.5 h-4 w-4 text-accent" />
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Recommended Book
-                  </p>
-                  <p className="mt-1 text-sm font-medium">{result.recommendedBook}</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 rounded-md bg-secondary p-3">
-                <Video className="mt-0.5 h-4 w-4 text-accent" />
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Recommended Video
-                  </p>
-                  <p className="mt-1 text-sm font-medium">{result.recommendedVideo}</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 rounded-md bg-secondary p-3">
-                <Calendar className="mt-0.5 h-4 w-4 text-accent" />
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Event Type
-                  </p>
-                  <p className="mt-1 text-sm font-medium">{result.recommendedEventType}</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 rounded-md bg-secondary p-3">
-                <Search className="mt-0.5 h-4 w-4 text-accent" />
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Deep Dive
-                  </p>
-                  <p className="mt-1 text-sm font-medium">{result.recommendedDeepDive}</p>
-                </div>
+              <div className="mt-4 space-y-3">
+                {scoreRows.map((score) => (
+                  <div key={score.key} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-muted-foreground">{score.label}</span>
+                      <span className={`text-xs font-medium ${getScoreColor(score.score)}`}>{score.score}/10</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-secondary">
+                      <div
+                        className={`h-full rounded-full transition-all ${getScoreBarColor(score.score)}`}
+                        style={{ width: `${score.score * 10}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-border bg-secondary/30 p-4">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Resource loadout
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <ResourceItem icon={BookOpen} label="Book" value={result.recommendedBook} />
+            <ResourceItem icon={Video} label="Video" value={result.recommendedVideo} />
+            <ResourceItem icon={Calendar} label="Local event type" value={result.recommendedEventType} />
+            <ResourceItem icon={Search} label="Deep dive" value={result.recommendedDeepDive} />
+          </div>
+        </section>
+
+        {result.sevenDayPlan?.length > 0 && (
+          <section className="rounded-xl border border-border bg-card p-4">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+              Seven-day direction
+            </p>
+            <div className="mt-3 grid gap-2">
+              {result.sevenDayPlan.slice(0, 7).map((step, index) => (
+                <div key={`${index}-${step}`} className="flex items-start gap-3 rounded-lg bg-secondary/50 p-2.5">
+                  <Badge variant="outline" className="mt-0.5 shrink-0 border-border text-[10px]">
+                    {index + 1}
+                  </Badge>
+                  <p className="text-sm">{step}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </CardContent>
     </Card>
+  )
+}
+
+function SignalCard({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: typeof AlertTriangle
+  label: string
+  value: string
+  tone: "danger" | "warning" | "success"
+}) {
+  const toneClass = {
+    danger: "bg-destructive/10 text-destructive",
+    warning: "bg-warning/10 text-warning",
+    success: "bg-chart-1/10 text-chart-1",
+  }[tone]
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-3">
+      <div className={`inline-flex rounded-lg p-1.5 ${toneClass}`}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <p className="mt-3 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 text-sm leading-relaxed">{value}</p>
+    </div>
+  )
+}
+
+function AgentSignal({ name, identity, value }: { name: string; identity: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg bg-card/80 p-3">
+      <p className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-accent">{name}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{identity}</p>
+      <p className="mt-2 line-clamp-4 text-xs leading-relaxed">{value}</p>
+    </div>
+  )
+}
+
+function ResourceItem({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof BookOpen
+  label: string
+  value: string
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg bg-card p-3">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+      <div>
+        <p className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+        <p className="mt-1 text-sm font-medium leading-relaxed">{value}</p>
+      </div>
+    </div>
   )
 }
