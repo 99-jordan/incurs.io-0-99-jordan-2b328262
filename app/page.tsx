@@ -48,7 +48,6 @@ export default function Home() {
   })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [memoryCollapsed, setMemoryCollapsed] = useState(true)
-  const [mounted, setMounted] = useState(false)
   const [consent, setConsent] = useState<GDPRConsent | null>(null)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
@@ -127,45 +126,40 @@ export default function Home() {
 
   // Load chats and memory on mount
   useEffect(() => {
-    setMounted(true)
-    
-    // Check GDPR consent
-    const storedConsent = getConsent()
-    setConsent(storedConsent)
-    
-    // Show banner if no valid consent (but don't block app)
-    if (!hasValidConsent()) {
-      setShowConsentBanner(true)
-    }
-    
-    // Always load data and ensure there's a current chat
-    enforceDataRetention(90)
-    
-    const loadedChats = getChats()
-    const loadedMemory = (storedConsent?.memoryStorage ?? true) ? getMemory() : {
-      knownGoal: null,
-      repeatedBottleneck: null,
-      currentAdvantage: null,
-      currentRisk: null,
-      lastCommitment: null,
-      proofOfAction: null,
-      lessonLearned: null,
-      nextCheckInQuestion: null,
-      updatedAt: null,
-    }
-    setMemory(loadedMemory)
+    try {
+      // Check GDPR consent
+      const storedConsent = getConsent()
+      setConsent(storedConsent)
 
-    // CRITICAL: Always ensure there's a current chat to prevent useChat id race condition
-    if (loadedChats.length > 0) {
-      const sorted = [...loadedChats].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-      setChats(loadedChats)
-      setCurrentChatId(sorted[0].id)
-    } else {
-      // Create initial chat so useChat always has a stable id
+      // Show banner if no valid consent (but don't block app)
+      if (!hasValidConsent()) {
+        setShowConsentBanner(true)
+      }
+
+      // Always load data and ensure there's a current chat
+      enforceDataRetention(90)
+
+      const loadedChats = getChats()
+      const loadedMemory = (storedConsent?.memoryStorage ?? true) ? getMemory() : null
+      if (loadedMemory) setMemory(loadedMemory)
+
+      // Always ensure there's a current chat to prevent useChat id race condition
+      if (loadedChats.length > 0) {
+        const sorted = [...loadedChats].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+        setChats(loadedChats)
+        setCurrentChatId(sorted[0].id)
+      } else {
+        const initialChat = createChat()
+        setChats([initialChat])
+        setCurrentChatId(initialChat.id)
+        saveChats([initialChat])
+      }
+    } catch (err) {
+      console.error("[v0] Mount error:", err)
+      // Fallback: create a fresh chat so the app is at least usable
       const initialChat = createChat()
       setChats([initialChat])
       setCurrentChatId(initialChat.id)
-      saveChats([initialChat])
     }
   }, [])
 
@@ -285,19 +279,6 @@ export default function Home() {
   const displayMessages: Message[] = useMemo(() => {
     return messages.map(uiMessageToMessage)
   }, [messages])
-
-  if (!mounted) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center">
-          <h1 className="mb-2 font-mono text-2xl font-bold tracking-tight">
-            incurs<span className="text-accent">.</span>io
-          </h1>
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <>
