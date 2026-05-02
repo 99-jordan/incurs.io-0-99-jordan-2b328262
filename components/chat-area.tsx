@@ -1,7 +1,6 @@
 "use client"
 
-import { useRef, useEffect } from "react"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { useRef, useEffect, useLayoutEffect } from "react"
 import { ChatMessage } from "./chat-message"
 import type { Message } from "@/lib/types"
 import { Brain, Zap, Target, Shield, Sparkles } from "lucide-react"
@@ -12,15 +11,34 @@ interface ChatAreaProps {
 }
 
 export function ChatArea({ messages, isLoading }: ChatAreaProps) {
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const stickToBottomRef = useRef(true)
 
+  // Track whether the user is "at the bottom". If they scroll up, we stop
+  // auto-following so they can read history without being yanked down.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+      stickToBottomRef.current = distanceFromBottom < 80
+    }
+    el.addEventListener("scroll", onScroll, { passive: true })
+    return () => el.removeEventListener("scroll", onScroll)
+  }, [])
+
+  // Sync scroll *before paint* using auto (instant) so the stream feels
+  // smooth rather than chasing a smooth-scroll animation behind tokens.
+  useLayoutEffect(() => {
+    if (!stickToBottomRef.current) return
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [messages, isLoading])
 
   if (messages.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center p-8">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-8">
         <div className="max-w-xl text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10">
             <Brain className="h-8 w-8 text-accent" />
@@ -89,7 +107,7 @@ export function ChatArea({ messages, isLoading }: ChatAreaProps) {
   const isWaitingForReply = isLoading && (!lastMessage || lastMessage.role === "user")
 
   return (
-    <ScrollArea className="flex-1">
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
       <div className="mx-auto max-w-3xl px-4 py-6">
         {messages.map((message) => (
           <ChatMessage key={message.id} message={message} />
@@ -107,9 +125,7 @@ export function ChatArea({ messages, isLoading }: ChatAreaProps) {
             </div>
           </div>
         )}
-
-        <div ref={bottomRef} />
       </div>
-    </ScrollArea>
+    </div>
   )
 }

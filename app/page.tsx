@@ -313,20 +313,20 @@ export default function Home() {
         onDataDeleted={handleDataDeleted}
       />
 
-      <div className="flex h-screen bg-background">
-          <ChatSidebar
-            chats={chats}
-            currentChatId={currentChatId}
-            onSelectChat={handleSelectChat}
-            onNewChat={handleNewChat}
-            onDeleteChat={handleDeleteChat}
-            onClearAllChats={handleClearAllChats}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-            onOpenPrivacySettings={() => setShowPrivacySettings(true)}
-          />
+      <div className="flex h-screen overflow-hidden bg-background">
+        <ChatSidebar
+          chats={chats}
+          currentChatId={currentChatId}
+          onSelectChat={handleSelectChat}
+          onNewChat={handleNewChat}
+          onDeleteChat={handleDeleteChat}
+          onClearAllChats={handleClearAllChats}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onOpenPrivacySettings={() => setShowPrivacySettings(true)}
+        />
 
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <ChatArea messages={displayMessages} isLoading={isLoading} />
           <ChatInput onSend={handleSendMessage} onStop={stop} isLoading={isLoading} />
         </div>

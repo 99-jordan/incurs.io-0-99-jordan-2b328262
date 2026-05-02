@@ -49,7 +49,7 @@ export function MemoryPanel({
 
   if (collapsed) {
     return (
-      <div className="flex h-full w-12 flex-col border-l border-border bg-card">
+      <div className="flex h-full w-12 shrink-0 flex-col border-l border-border bg-card transition-[width] duration-200 ease-out">
         <Button
           variant="ghost"
           size="icon"
@@ -63,7 +63,7 @@ export function MemoryPanel({
   }
 
   return (
-    <div className="flex h-full w-80 flex-col border-l border-border bg-card">
+    <div className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-card transition-[width] duration-200 ease-out">
       <div className="flex h-14 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">
           <Brain className="h-4 w-4 text-accent" />

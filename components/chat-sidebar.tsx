@@ -56,7 +56,7 @@ export function ChatSidebar({
 
   if (collapsed) {
     return (
-      <div className="flex h-full w-16 flex-col border-r border-border bg-card">
+      <div className="flex h-full w-16 shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 ease-out">
         <div className="flex h-14 items-center justify-center border-b border-border">
           <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="text-muted-foreground">
             <ChevronRight className="h-4 w-4" />
@@ -77,7 +77,7 @@ export function ChatSidebar({
   }
 
   return (
-    <div className="flex h-full w-64 flex-col border-r border-border bg-card">
+    <div className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 ease-out">
       <div className="flex h-14 items-center justify-between border-b border-border px-4">
         <span className="font-mono text-sm font-medium tracking-tight">incurs.io</span>
         <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="text-muted-foreground">
