@@ -40,21 +40,21 @@ export function ConsentBanner({ onAccept, onDecline }: ConsentBannerProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
-      <Card className="mx-4 max-w-lg border-border bg-card">
-        <CardHeader className="space-y-1">
+    <div className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2">
+      <Card className="border-border bg-card shadow-2xl">
+        <CardHeader className="space-y-1 pb-3">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-accent" />
-            <CardTitle className="text-lg">Data Protection</CardTitle>
+            <CardTitle className="text-base">Data Protection</CardTitle>
           </div>
-          <CardDescription>
+          <CardDescription className="text-xs">
             incurs.io processes your data to provide personalised diagnosis and actionable insights.
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            We use AI to analyse your goals and provide tailored recommendations. Your data is stored locally on your device and processed securely.
+        <CardContent className="space-y-3 pb-3">
+          <p className="text-xs text-muted-foreground">
+            We use AI to analyse your goals. Your data is stored locally on your device.
           </p>
 
           {showDetails ? (

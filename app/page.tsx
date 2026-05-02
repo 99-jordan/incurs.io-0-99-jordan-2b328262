@@ -127,27 +127,22 @@ export default function Home() {
 
   // Load chats and memory on mount
   useEffect(() => {
-    console.log("[v0] Component mounting...")
     setMounted(true)
     
     // Check GDPR consent
     const storedConsent = getConsent()
-    console.log("[v0] Stored consent:", storedConsent)
     setConsent(storedConsent)
     
-    // Show banner if no valid consent
-    const valid = hasValidConsent()
-    console.log("[v0] Has valid consent:", valid)
-    if (!valid) {
+    // Show banner if no valid consent (but don't block app)
+    if (!hasValidConsent()) {
       setShowConsentBanner(true)
-      // Still load the app, just show banner overlay
     }
     
-    // Load data regardless (user can see app behind banner)
+    // Always load data and ensure there's a current chat
     enforceDataRetention(90)
     
     const loadedChats = getChats()
-    const loadedMemory = storedConsent?.memoryStorage ? getMemory() : {
+    const loadedMemory = (storedConsent?.memoryStorage ?? true) ? getMemory() : {
       knownGoal: null,
       repeatedBottleneck: null,
       currentAdvantage: null,
@@ -158,13 +153,19 @@ export default function Home() {
       nextCheckInQuestion: null,
       updatedAt: null,
     }
-    setChats(loadedChats)
     setMemory(loadedMemory)
 
-    // Select most recent chat or create new one
+    // CRITICAL: Always ensure there's a current chat to prevent useChat id race condition
     if (loadedChats.length > 0) {
       const sorted = [...loadedChats].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      setChats(loadedChats)
       setCurrentChatId(sorted[0].id)
+    } else {
+      // Create initial chat so useChat always has a stable id
+      const initialChat = createChat()
+      setChats([initialChat])
+      setCurrentChatId(initialChat.id)
+      saveChats([initialChat])
     }
   }, [])
 
@@ -186,48 +187,31 @@ export default function Home() {
     (chatId: string) => {
       setChats((prev) => {
         const updated = prev.filter((c) => c.id !== chatId)
+        // Ensure we always have at least one chat
+        if (updated.length === 0) {
+          const fresh = createChat()
+          saveChats([fresh])
+          if (currentChatId === chatId) {
+            setCurrentChatId(fresh.id)
+          }
+          return [fresh]
+        }
         saveChats(updated)
+        if (currentChatId === chatId) {
+          setCurrentChatId(updated[0].id)
+        }
         return updated
       })
-      if (currentChatId === chatId) {
-        const remaining = chats.filter((c) => c.id !== chatId)
-        if (remaining.length > 0) {
-          setCurrentChatId(remaining[0].id)
-        } else {
-          setCurrentChatId(null)
-        }
-      }
     },
-    [currentChatId, chats]
+    [currentChatId]
   )
 
   const handleSendMessage = useCallback(
-    async (content: string) => {
-      // Create new chat if none selected
-      if (!currentChatId) {
-        const newChat = createChat()
-        const userMessage: Message = {
-          id: crypto.randomUUID(),
-          role: "user",
-          content,
-          timestamp: new Date(),
-        }
-        newChat.messages = [userMessage]
-        newChat.title = content.length > 40 ? content.slice(0, 40) + "..." : content
-        newChat.updatedAt = new Date()
-
-        setChats((prev) => {
-          const updated = [newChat, ...prev]
-          saveChats(updated)
-          return updated
-        })
-        setCurrentChatId(newChat.id)
-      }
-
-      // Send to AI using AI SDK 6 pattern
+    (content: string) => {
+      // currentChatId is always set thanks to mount logic - just send
       sendMessage({ text: content })
     },
-    [currentChatId, sendMessage]
+    [sendMessage]
   )
 
   const handleClearMemory = useCallback(() => {
@@ -249,28 +233,6 @@ export default function Home() {
     saveConsent(newConsent)
     setConsent(newConsent)
     setShowConsentBanner(false)
-    
-    // Load data now that consent is given
-    enforceDataRetention(90)
-    const loadedChats = getChats()
-    const loadedMemory = newConsent.memoryStorage ? getMemory() : {
-      knownGoal: null,
-      repeatedBottleneck: null,
-      currentAdvantage: null,
-      currentRisk: null,
-      lastCommitment: null,
-      proofOfAction: null,
-      lessonLearned: null,
-      nextCheckInQuestion: null,
-      updatedAt: null,
-    }
-    setChats(loadedChats)
-    setMemory(loadedMemory)
-    
-    if (loadedChats.length > 0) {
-      const sorted = [...loadedChats].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-      setCurrentChatId(sorted[0].id)
-    }
   }, [])
 
   const handleDeclineConsent = useCallback(() => {
@@ -289,8 +251,11 @@ export default function Home() {
   }, [])
 
   const handleDataDeleted = useCallback(() => {
-    setChats([])
-    setCurrentChatId(null)
+    // Ensure we always have a current chat
+    const fresh = createChat()
+    setChats([fresh])
+    setCurrentChatId(fresh.id)
+    saveChats([fresh])
     setMemory({
       knownGoal: null,
       repeatedBottleneck: null,
