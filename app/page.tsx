@@ -5,6 +5,7 @@ import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, UIMessage } from "ai"
 import type { Chat, Message, ArmourMemory } from "@/lib/types"
 import { getChats, saveChats, createChat, updateChatTitle, getMemory, saveMemory, clearMemory } from "@/lib/chat-store"
+import { getOrCreateUserId } from "@/lib/user-id"
 import { getConsent, saveConsent, hasValidConsent, enforceDataRetention, type GDPRConsent } from "@/lib/gdpr"
 import { ConsentBanner } from "@/components/consent-banner"
 import { PrivacySettings } from "@/components/privacy-settings"
@@ -51,11 +52,24 @@ export default function Home() {
   const [consent, setConsent] = useState<GDPRConsent | null>(null)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [memoryBackend, setMemoryBackend] = useState<"mubit" | "session-only" | "unknown">("unknown")
 
-  // Create transport with memoization
+  // Create transport that attaches userId + chatId to every request so
+  // Mubit can scope long-term memory to this specific browser/user.
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: "/api/triage" }),
-    []
+    () =>
+      new DefaultChatTransport({
+        api: "/api/triage",
+        prepareSendMessagesRequest: ({ messages, id }) => ({
+          body: {
+            messages,
+            chatId: id,
+            userId: userId ?? "incurs-demo-user",
+          },
+        }),
+      }),
+    [userId]
   )
 
   // AI chat hook with AI SDK 6 patterns
@@ -127,6 +141,19 @@ export default function Home() {
   // Load chats and memory on mount
   useEffect(() => {
     try {
+      // Stable per-browser user id so Mubit can build long-term memory
+      setUserId(getOrCreateUserId())
+
+      // Check which memory backend is active server-side
+      fetch("/api/triage", { method: "GET" })
+        .then((r) => r.json())
+        .then((info) => {
+          if (info?.memory === "mubit" || info?.memory === "session-only") {
+            setMemoryBackend(info.memory)
+          }
+        })
+        .catch(() => setMemoryBackend("session-only"))
+
       // Check GDPR consent
       const storedConsent = getConsent()
       setConsent(storedConsent)
@@ -322,6 +349,7 @@ export default function Home() {
           onClearMemory={handleClearMemory}
           collapsed={memoryCollapsed}
           onToggleCollapse={() => setMemoryCollapsed(!memoryCollapsed)}
+          memoryBackend={memoryBackend}
         />
       </div>
     </>

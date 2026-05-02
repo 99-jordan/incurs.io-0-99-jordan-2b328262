@@ -23,6 +23,7 @@ interface MemoryPanelProps {
   onClearMemory: () => void
   collapsed: boolean
   onToggleCollapse: () => void
+  memoryBackend?: "mubit" | "session-only" | "unknown"
 }
 
 const memoryFields = [
@@ -36,8 +37,15 @@ const memoryFields = [
   { key: "nextCheckInQuestion", label: "Next Check-in", icon: HelpCircle, color: "text-muted-foreground" },
 ] as const
 
-export function MemoryPanel({ memory, onClearMemory, collapsed, onToggleCollapse }: MemoryPanelProps) {
+export function MemoryPanel({
+  memory,
+  onClearMemory,
+  collapsed,
+  onToggleCollapse,
+  memoryBackend = "unknown",
+}: MemoryPanelProps) {
   const hasMemory = Object.values(memory).some((v) => v !== null && v !== undefined)
+  const isMubitActive = memoryBackend === "mubit"
 
   if (collapsed) {
     return (
@@ -60,6 +68,15 @@ export function MemoryPanel({ memory, onClearMemory, collapsed, onToggleCollapse
         <div className="flex items-center gap-2">
           <Brain className="h-4 w-4 text-accent" />
           <span className="text-sm font-medium">Armour Memory</span>
+          {isMubitActive ? (
+            <Badge variant="outline" className="border-chart-1/40 bg-chart-1/10 px-1.5 py-0 text-[10px] font-medium text-chart-1">
+              Mubit live
+            </Badge>
+          ) : memoryBackend === "session-only" ? (
+            <Badge variant="outline" className="border-border px-1.5 py-0 text-[10px] font-medium text-muted-foreground">
+              Local only
+            </Badge>
+          ) : null}
         </div>
         <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="text-muted-foreground">
           <Brain className="h-4 w-4" />
@@ -119,8 +136,9 @@ export function MemoryPanel({ memory, onClearMemory, collapsed, onToggleCollapse
         <div className="flex items-start gap-2">
           <Lock className="mt-0.5 h-3 w-3 text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
-            incurs.io only stores memories you choose to save. You can review, edit, or delete memories at any
-            time.
+            {isMubitActive
+              ? "Long-term memory is stored in Mubit, scoped to your browser session. You can review, edit, or delete memories at any time."
+              : "incurs.io only stores memories you choose to save. You can review, edit, or delete memories at any time."}
           </p>
         </div>
       </div>
