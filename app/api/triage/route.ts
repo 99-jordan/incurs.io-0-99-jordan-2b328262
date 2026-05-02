@@ -1,4 +1,4 @@
-import { streamText, convertToModelMessages, UIMessage, consumeStream } from "ai"
+import { streamText, convertToModelMessages, UIMessage } from "ai"
 
 const SESSION_ID = "incurs-demo-user"
 
@@ -93,10 +93,7 @@ export async function POST(req: Request) {
       abortSignal: req.signal,
     })
 
-    return result.toUIMessageStreamResponse({
-      originalMessages: messages,
-      consumeSseStream: consumeStream,
-    })
+    return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error("[v0] Triage API error:", error)
     return new Response(JSON.stringify({ error: "Failed to process triage request" }), {
