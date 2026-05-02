@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import type { Chat } from "@/lib/types"
-import { Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight, Shield } from "lucide-react"
 
 interface ChatSidebarProps {
   chats: Chat[]
@@ -15,6 +15,7 @@ interface ChatSidebarProps {
   onDeleteChat: (chatId: string) => void
   collapsed: boolean
   onToggleCollapse: () => void
+  onOpenPrivacySettings?: () => void
 }
 
 export function ChatSidebar({
@@ -25,6 +26,7 @@ export function ChatSidebar({
   onDeleteChat,
   collapsed,
   onToggleCollapse,
+  onOpenPrivacySettings,
 }: ChatSidebarProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -114,8 +116,19 @@ export function ChatSidebar({
         </div>
       </ScrollArea>
 
-      <div className="border-t border-border p-3">
-        <p className="text-center text-xs text-muted-foreground">Adaptive armour for ambition</p>
+      <div className="flex items-center justify-between border-t border-border p-3">
+        <p className="text-xs text-muted-foreground">Adaptive armour for ambition</p>
+        {onOpenPrivacySettings && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onOpenPrivacySettings}
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            title="Privacy Settings"
+          >
+            <Shield className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   )

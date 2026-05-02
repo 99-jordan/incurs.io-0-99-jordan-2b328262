@@ -242,6 +242,56 @@ export default function Home() {
     })
   }, [])
 
+  const handleAcceptConsent = useCallback((newConsent: GDPRConsent) => {
+    saveConsent(newConsent)
+    setConsent(newConsent)
+    setShowConsentBanner(false)
+    
+    // Load data now that consent is given
+    enforceDataRetention(90)
+    const loadedChats = getChats()
+    const loadedMemory = newConsent.memoryStorage ? getMemory() : {
+      knownGoal: null,
+      repeatedBottleneck: null,
+      currentAdvantage: null,
+      currentRisk: null,
+      lastCommitment: null,
+      proofOfAction: null,
+      lessonLearned: null,
+      nextCheckInQuestion: null,
+      updatedAt: null,
+    }
+    setChats(loadedChats)
+    setMemory(loadedMemory)
+    
+    if (loadedChats.length > 0) {
+      const sorted = [...loadedChats].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      setCurrentChatId(sorted[0].id)
+    }
+  }, [])
+
+  const handleDeclineConsent = useCallback(() => {
+    // User declined - show a message that the app requires consent
+    setShowConsentBanner(false)
+  }, [])
+
+  const handleDataDeleted = useCallback(() => {
+    setChats([])
+    setCurrentChatId(null)
+    setMemory({
+      knownGoal: null,
+      repeatedBottleneck: null,
+      currentAdvantage: null,
+      currentRisk: null,
+      lastCommitment: null,
+      proofOfAction: null,
+      lessonLearned: null,
+      nextCheckInQuestion: null,
+      updatedAt: null,
+    })
+    setShowConsentBanner(true)
+  }, [])
+
   // Get streaming content from the last assistant message if loading
   const streamingContent = useMemo(() => {
     if (isLoading && messages.length > 0) {
@@ -272,31 +322,51 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <ChatSidebar
-        chats={chats}
-        currentChatId={currentChatId}
-        onSelectChat={handleSelectChat}
-        onNewChat={handleNewChat}
-        onDeleteChat={handleDeleteChat}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+    <>
+      {/* GDPR Consent Banner */}
+      {showConsentBanner && (
+        <ConsentBanner onAccept={handleAcceptConsent} onDecline={handleDeclineConsent} />
+      )}
+
+      {/* Privacy Settings Dialog */}
+      <PrivacySettings
+        open={showPrivacySettings}
+        onOpenChange={setShowPrivacySettings}
+        consent={consent}
+        onConsentChange={setConsent}
+        onDataDeleted={handleDataDeleted}
       />
 
-      {/* Main Chat Area */}
-      <div className="flex flex-1 flex-col">
-        <ChatArea messages={displayMessages} isLoading={isLoading} streamingContent={streamingContent} />
-        <ChatInput onSend={handleSendMessage} onStop={stop} isLoading={isLoading} />
-      </div>
+      {/* Main App - only show if consent is valid */}
+      {!showConsentBanner && (
+        <div className="flex h-screen bg-background">
+          {/* Sidebar */}
+          <ChatSidebar
+            chats={chats}
+            currentChatId={currentChatId}
+            onSelectChat={handleSelectChat}
+            onNewChat={handleNewChat}
+            onDeleteChat={handleDeleteChat}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+            onOpenPrivacySettings={() => setShowPrivacySettings(true)}
+          />
 
-      {/* Memory Panel */}
-      <MemoryPanel
-        memory={memory}
-        onClearMemory={handleClearMemory}
-        collapsed={memoryCollapsed}
-        onToggleCollapse={() => setMemoryCollapsed(!memoryCollapsed)}
-      />
-    </div>
+          {/* Main Chat Area */}
+          <div className="flex flex-1 flex-col">
+            <ChatArea messages={displayMessages} isLoading={isLoading} streamingContent={streamingContent} />
+            <ChatInput onSend={handleSendMessage} onStop={stop} isLoading={isLoading} />
+          </div>
+
+          {/* Memory Panel */}
+          <MemoryPanel
+            memory={memory}
+            onClearMemory={handleClearMemory}
+            collapsed={memoryCollapsed}
+            onToggleCollapse={() => setMemoryCollapsed(!memoryCollapsed)}
+          />
+        </div>
+      )}
+    </>
   )
 }

@@ -1,7 +1,5 @@
 import { streamText, convertToModelMessages, UIMessage } from "ai"
 
-const SESSION_ID = "incurs-demo-user"
-
 // System prompt that defines the CEO Agent behaviour
 const SYSTEM_PROMPT = `You are the CEO Agent of incurs.io — an adaptive armour system for ambitious people.
 
@@ -76,18 +74,13 @@ export async function POST(req: Request) {
   try {
     const { messages }: { messages: UIMessage[] } = await req.json()
 
-    // Check if Mubit API key is available
-    const hasMubitKey = !!process.env.MUBIT_API_KEY
-
-    // Use AI Gateway model string (no provider import needed)
-    let model: string = "openai/gpt-4o"
-
-    // Note: Mubit middleware would wrap the model, but with AI Gateway 
-    // we pass model string directly to streamText
-    // For Mubit integration, we'd need to check if it works with gateway pattern
+    // TODO: Mubit memory integration requires MUBIT_API_KEY
+    // When available, wrap model with mubitMemoryMiddleware for cross-session memory
+    // See: https://mubit.ai/docs for integration
 
     const result = streamText({
-      model,
+      // AI Gateway model string (no provider import needed)
+      model: "openai/gpt-4o",
       system: SYSTEM_PROMPT,
       messages: await convertToModelMessages(messages),
       abortSignal: req.signal,
