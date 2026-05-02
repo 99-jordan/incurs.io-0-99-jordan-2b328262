@@ -1,4 +1,9 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai"
+import { createGroq } from "@ai-sdk/groq"
+
+const groq = createGroq({
+  apiKey: process.env.GROQ_API_KEY,
+})
 
 // System prompt that defines the CEO Agent behaviour
 const SYSTEM_PROMPT = `You are the CEO Agent of incurs.io — an adaptive armour system for ambitious people.
@@ -72,8 +77,8 @@ export async function POST(req: Request) {
     const { messages }: { messages: UIMessage[] } = await req.json()
 
     const result = streamText({
-      // AI Gateway model string — no provider import needed
-      model: "openai/gpt-4o",
+      // Groq direct provider — fast free-tier inference
+      model: groq("llama-3.3-70b-versatile"),
       system: SYSTEM_PROMPT,
       messages: await convertToModelMessages(messages),
       abortSignal: req.signal,
