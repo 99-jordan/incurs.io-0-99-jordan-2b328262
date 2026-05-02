@@ -251,6 +251,13 @@ export default function Home() {
     [currentChatId],
   )
 
+  const handleClearAllChats = useCallback(() => {
+    const fresh = createChat()
+    saveChats([fresh])
+    setChats([fresh])
+    setCurrentChatId(fresh.id)
+  }, [])
+
   const handleSendMessage = useCallback(
     (content: string) => {
       sendMessage({ text: content })
@@ -313,16 +320,17 @@ export default function Home() {
       />
 
       <div className="flex h-screen bg-background">
-        <ChatSidebar
-          chats={chats}
-          currentChatId={currentChatId}
-          onSelectChat={handleSelectChat}
-          onNewChat={handleNewChat}
-          onDeleteChat={handleDeleteChat}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          onOpenPrivacySettings={() => setShowPrivacySettings(true)}
-        />
+          <ChatSidebar
+            chats={chats}
+            currentChatId={currentChatId}
+            onSelectChat={handleSelectChat}
+            onNewChat={handleNewChat}
+            onDeleteChat={handleDeleteChat}
+            onClearAllChats={handleClearAllChats}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+            onOpenPrivacySettings={() => setShowPrivacySettings(true)}
+          />
 
         <div className="flex flex-1 flex-col">
           <ChatArea messages={displayMessages} isLoading={isLoading} streamingContent={streamingContent} />
