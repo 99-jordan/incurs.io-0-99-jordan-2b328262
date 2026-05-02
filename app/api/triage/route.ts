@@ -1,5 +1,4 @@
-import { streamText, convertToModelMessages, wrapLanguageModel, type UIMessage, type LanguageModel } from "ai"
-import { gateway } from "ai"
+import { streamText, convertToModelMessages, type UIMessage } from "ai"
 
 // System prompt that defines the CEO Agent behaviour
 const SYSTEM_PROMPT = `You are the CEO Agent of incurs.io — an adaptive armour system for ambitious people.
@@ -10,7 +9,7 @@ CONVERSATION STYLE:
 - Be direct but warm. No fluff. No generic motivation.
 - Ask one question at a time. Let the conversation breathe.
 - Challenge gently when you sense avoidance or vagueness.
-- Remember what the user has told you across the conversation and across past sessions (Armour Memory).
+- Remember what the user has told you across the conversation.
 
 DIAGNOSIS FRAMEWORK:
 You are analysing 8 bottleneck dimensions:
@@ -64,43 +63,17 @@ After gathering enough context (usually 4-8 exchanges), provide a structured dia
 
 Continue the conversation naturally after the diagnosis. Ask if they want to commit to the action.
 
-ARMOUR MEMORY (long-term):
-You have access to the user's past sessions via Mubit. Reference their history when relevant. Notice patterns. Call out when they're repeating old mistakes. Treat memory as proof of progress, not just facts.
-
 Use British English. Be sharp. Be kind. Be useful.`
 
 export const maxDuration = 60
 
-// Demo session id — in a real app this would come from your auth layer.
-// Mubit uses this to scope long-term memory per user.
-const DEFAULT_SESSION_ID = "incurs-demo-user"
-
 export async function POST(req: Request) {
   try {
-    const { messages, sessionId }: { messages: UIMessage[]; sessionId?: string } = await req.json()
-
-    // Base model via Vercel AI Gateway
-    const baseModel: LanguageModel = gateway("openai/gpt-4o")
-
-    // Wrap with Mubit memory middleware if API key is available
-    let model: LanguageModel = baseModel
-    if (process.env.MUBIT_API_KEY) {
-      try {
-        const { mubitMemoryMiddleware } = await import("@mubit-ai/ai-sdk")
-        model = wrapLanguageModel({
-          model: baseModel,
-          middleware: mubitMemoryMiddleware({
-            apiKey: process.env.MUBIT_API_KEY,
-            sessionId: sessionId ?? DEFAULT_SESSION_ID,
-          }),
-        })
-      } catch (err) {
-        console.warn("[v0] Mubit middleware unavailable, falling back to base model:", err)
-      }
-    }
+    const { messages }: { messages: UIMessage[] } = await req.json()
 
     const result = streamText({
-      model,
+      // AI Gateway model string — no provider import needed
+      model: "openai/gpt-4o",
       system: SYSTEM_PROMPT,
       messages: await convertToModelMessages(messages),
       abortSignal: req.signal,
@@ -109,9 +82,9 @@ export async function POST(req: Request) {
     return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error("[v0] Triage API error:", error)
-    return new Response(JSON.stringify({ error: "Failed to process triage request" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    })
+    return new Response(
+      JSON.stringify({ error: "Failed to process triage request", details: String(error) }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    )
   }
 }
