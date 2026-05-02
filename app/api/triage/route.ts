@@ -1,8 +1,9 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai"
-import { createGroq } from "@ai-sdk/groq"
+import { createMistral } from "@ai-sdk/mistral"
 
-const groq = createGroq({
-  apiKey: process.env.GROQ_API_KEY,
+// Mistral: French company, EU-hosted, GDPR-compliant, no training on API data.
+const mistral = createMistral({
+  apiKey: process.env.MISTRAL_API_KEY,
 })
 
 // System prompt that defines the CEO Agent behaviour
@@ -77,8 +78,8 @@ export async function POST(req: Request) {
     const { messages }: { messages: UIMessage[] } = await req.json()
 
     const result = streamText({
-      // Groq direct provider — fast free-tier inference
-      model: groq("llama-3.3-70b-versatile"),
+      // Mistral Large — EU-hosted, GDPR-compliant, free tier on La Plateforme
+      model: mistral("mistral-large-latest"),
       system: SYSTEM_PROMPT,
       messages: await convertToModelMessages(messages),
       abortSignal: req.signal,
