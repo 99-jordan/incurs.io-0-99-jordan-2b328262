@@ -13,6 +13,8 @@ import { ChatSidebar } from "@/components/chat-sidebar"
 import { ChatArea } from "@/components/chat-area"
 import { ChatInput } from "@/components/chat-input"
 import { MemoryPanel } from "@/components/memory-panel"
+import { Badge } from "@/components/ui/badge"
+import { buildDemoAssistantReply } from "@/lib/triage-demo"
 
 const EMPTY_MEMORY: ArmourMemory = {
   knownGoal: null,
@@ -57,12 +59,16 @@ export default function Home() {
   const [chats, setChats] = useState<Chat[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [memory, setMemory] = useState<ArmourMemory>(EMPTY_MEMORY)
+  const [pendingMemory, setPendingMemory] = useState<ArmourMemory | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [memoryCollapsed, setMemoryCollapsed] = useState(true)
   const [consent, setConsent] = useState<GDPRConsent | null>(null)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
   const [memoryBackend, setMemoryBackend] = useState<"mubit" | "session-only" | "unknown">("unknown")
+  const [aiBackend, setAiBackend] = useState<"mistral" | "demo" | "unknown">("unknown")
+  const [intelBackend, setIntelBackend] = useState<"live" | "demo" | "unknown">("unknown")
+  const [cronBackend, setCronBackend] = useState<"enabled" | "manual-only" | "unknown">("unknown")
 
   // Stable refs so the transport never has to be recreated.
   const userIdRef = useRef<string>("incurs-demo-user")
@@ -111,21 +117,21 @@ export default function Home() {
       if (triageMatch) {
         try {
           const t = JSON.parse(triageMatch[1])
-          setMemory((prev) => {
-            const next: ArmourMemory = {
-              knownGoal: prev.knownGoal,
-              repeatedBottleneck: t.primaryBottleneck || prev.repeatedBottleneck,
-              currentAdvantage: t.currentAdvantage || prev.currentAdvantage,
-              currentRisk: t.riskIfUnchanged || prev.currentRisk,
-              lastCommitment: t.next24HourMove || prev.lastCommitment,
-              proofOfAction: t.proofOfAction || prev.proofOfAction,
-              lessonLearned: t.memoryUpdate || prev.lessonLearned,
-              nextCheckInQuestion: "Did you complete your 24-hour move?",
-              updatedAt: new Date(),
-            }
-            saveMemory(next)
-            return next
-          })
+          setPendingMemory((prev) => ({
+            knownGoal:
+              prev?.knownGoal ||
+              (finalMessages.find((m) => m.role === "user")
+                ? getUIMessageText(finalMessages.find((m) => m.role === "user") as UIMessage)
+                : null),
+            repeatedBottleneck: t.primaryBottleneck || prev?.repeatedBottleneck || null,
+            currentAdvantage: t.currentAdvantage || prev?.currentAdvantage || null,
+            currentRisk: t.riskIfUnchanged || prev?.currentRisk || null,
+            lastCommitment: t.next24HourMove || prev?.lastCommitment || null,
+            proofOfAction: t.proofOfAction || prev?.proofOfAction || null,
+            lessonLearned: t.memoryUpdateSuggestion || prev?.lessonLearned || null,
+            nextCheckInQuestion: t.nextCheckInQuestion || "Did you complete your 24-hour move?",
+            updatedAt: new Date(),
+          }))
         } catch {
           // ignore malformed triage block
         }
@@ -187,6 +193,15 @@ export default function Home() {
         .then((info) => {
           if (info?.memory === "mubit" || info?.memory === "session-only") {
             setMemoryBackend(info.memory)
+          }
+          if (info?.ai === "mistral" || info?.ai === "demo") {
+            setAiBackend(info.ai)
+          }
+          if (info?.intel === "live" || info?.intel === "demo") {
+            setIntelBackend(info.intel)
+          }
+          if (info?.cron === "enabled" || info?.cron === "manual-only") {
+            setCronBackend(info.cron)
           }
         })
         .catch(() => setMemoryBackend("session-only"))
@@ -260,14 +275,62 @@ export default function Home() {
 
   const handleSendMessage = useCallback(
     (content: string) => {
+      if (aiBackend === "demo") {
+        const userMessage: UIMessage = {
+          id: crypto.randomUUID(),
+          role: "user",
+          parts: [{ type: "text", text: content }],
+        } as UIMessage
+        const nextMessages = [...messages, userMessage]
+        const assistantMessage: UIMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          parts: [{ type: "text", text: buildDemoAssistantReply(nextMessages) }],
+        } as UIMessage
+        const finalMessages = [...nextMessages, assistantMessage]
+        setMessages(finalMessages)
+        if (currentChatId) persistChat(currentChatId, finalMessages)
+        return
+      }
+
       sendMessage({ text: content })
     },
-    [sendMessage],
+    [aiBackend, currentChatId, messages, persistChat, sendMessage, setMessages],
   )
 
   const handleClearMemory = useCallback(() => {
     clearMemory()
     setMemory(EMPTY_MEMORY)
+    setPendingMemory(null)
+  }, [])
+
+  const handleApproveMemory = useCallback(() => {
+    if (!pendingMemory) return
+    saveMemory(pendingMemory)
+    setMemory(pendingMemory)
+    setPendingMemory(null)
+
+    fetch("/api/memory/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        memoryType: "execution-pattern",
+        memoryText: pendingMemory.lessonLearned || pendingMemory.repeatedBottleneck || "Execution memory update",
+        goal: pendingMemory.knownGoal,
+        primaryBottleneck: pendingMemory.repeatedBottleneck,
+        proofOfAction: pendingMemory.proofOfAction,
+        nextCheckInQuestion: pendingMemory.nextCheckInQuestion,
+        userId: userIdRef.current,
+      }),
+    }).catch(() => undefined)
+  }, [pendingMemory])
+
+  const handleRejectMemory = useCallback(() => {
+    setPendingMemory(null)
+  }, [])
+
+  const handleEditPendingMemory = useCallback((memoryText: string) => {
+    setPendingMemory((prev) => (prev ? { ...prev, lessonLearned: memoryText } : prev))
   }, [])
 
   const handleAcceptConsent = useCallback((newConsent: GDPRConsent) => {
@@ -327,12 +390,30 @@ export default function Home() {
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card/70 px-4 py-2 text-xs">
+            <Badge variant="outline" className="border-border">
+              {aiBackend === "mistral" ? "Live AI Enabled" : "Demo Triage"}
+            </Badge>
+            <Badge variant="outline" className="border-border">
+              {memoryBackend === "mubit" ? "Live Memory Enabled" : "Demo Memory"}
+            </Badge>
+            <Badge variant="outline" className="border-border">
+              {intelBackend === "live" ? "Live Intel Enabled" : "Demo Intel"}
+            </Badge>
+            <Badge variant="outline" className="border-border">
+              {cronBackend === "enabled" ? "Daily Cron Enabled" : "Manual Only"}
+            </Badge>
+          </div>
           <ChatArea messages={displayMessages} isLoading={isLoading} />
           <ChatInput onSend={handleSendMessage} onStop={stop} isLoading={isLoading} />
         </div>
 
         <MemoryPanel
           memory={memory}
+          pendingMemory={pendingMemory}
+          onApproveMemory={handleApproveMemory}
+          onRejectMemory={handleRejectMemory}
+          onEditPendingMemory={handleEditPendingMemory}
           onClearMemory={handleClearMemory}
           collapsed={memoryCollapsed}
           onToggleCollapse={() => setMemoryCollapsed(!memoryCollapsed)}

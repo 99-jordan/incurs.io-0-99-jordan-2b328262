@@ -1,20 +1,13 @@
 export type AgentType = "goal" | "reality" | "skill" | "resource" | "ceo"
 
-export type BottleneckCategory =
-  | "clarity"
-  | "validation"
-  | "capability"
-  | "capacity"
-  | "confidence"
-  | "support"
-  | "follow_through"
-  | "avoidance"
-
-export interface BottleneckScore {
-  category: BottleneckCategory
-  score: number
-  label: string
-  description: string
+export interface BottleneckScores {
+  salesReadiness: number
+  skillCoverage: number
+  executionCapacity: number
+  confidenceUnderPressure: number
+  marketValidation: number
+  supportNetwork: number
+  followThroughRisk: number
 }
 
 export interface TriageResult {
@@ -23,16 +16,26 @@ export interface TriageResult {
   hiddenObstacle: string
   currentAdvantage: string
   riskIfUnchanged: string
-  bottleneckScores: BottleneckScore[]
+  bottleneckScores: BottleneckScores
+  goalAgentDiagnosis: string
+  realityAgentDiagnosis: string
+  skillAgentDiagnosis: string
+  resourceAgentRecommendation: string
+  ceoFinalDecision: string
   next24HourMove: string
   sevenDayPlan: string[]
   recommendedBook: string
   recommendedVideo: string
   recommendedEventType: string
+  recommendedDeepDive: string
   messageTemplate: string
   proofOfAction: string
   stopDoing: string
-  memoryUpdate: string
+  memoryUpdateSuggestion: string
+  nextCheckInQuestion: string
+  memoryMode: "live" | "demo"
+  intelMode: "live" | "demo"
+  aiMode: "live" | "demo"
 }
 
 export interface Message {

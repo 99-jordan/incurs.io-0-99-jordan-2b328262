@@ -45,8 +45,7 @@ export function ChatArea({ messages, isLoading }: ChatAreaProps) {
           </div>
           <h1 className="mb-3 text-2xl font-semibold tracking-tight">incurs.io</h1>
           <p className="mb-8 text-muted-foreground">
-            Adaptive armour for ambition. Tell me what you want to achieve, and I&apos;ll diagnose the real
-            bottleneck stopping you.
+            Adaptive armour for ambition. Diagnose the bottleneck. Remember the pattern. Choose the next move.
           </p>
 
           <div className="grid gap-3 text-left sm:grid-cols-2">
@@ -55,7 +54,7 @@ export function ChatArea({ messages, isLoading }: ChatAreaProps) {
               <div>
                 <p className="text-sm font-medium">Goal Diagnosis</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Is your goal specific, measurable, and genuinely yours?
+                  What are you trying to build, change or achieve?
                 </p>
               </div>
             </div>
@@ -65,7 +64,7 @@ export function ChatArea({ messages, isLoading }: ChatAreaProps) {
               <div>
                 <p className="text-sm font-medium">Reality Check</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  What&apos;s your actual current state? What have you tried?
+                  What proof exists, and what are you avoiding?
                 </p>
               </div>
             </div>
@@ -75,7 +74,7 @@ export function ChatArea({ messages, isLoading }: ChatAreaProps) {
               <div>
                 <p className="text-sm font-medium">Bottleneck Map</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  8 dimensions analysed: clarity, validation, capability, capacity, and more.
+                  Sales readiness, validation, capacity, pressure and follow-through.
                 </p>
               </div>
             </div>
@@ -85,14 +84,14 @@ export function ChatArea({ messages, isLoading }: ChatAreaProps) {
               <div>
                 <p className="text-sm font-medium">CEO Decision</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  One practical next move. No fluff. Real motion.
+                  One practical next move. No huge plan. Real proof.
                 </p>
               </div>
             </div>
           </div>
 
           <p className="mt-8 text-sm text-muted-foreground">
-            Start by telling me: What do you want to build, achieve, or change?
+            Run your triage: what serious goal is stuck right now?
           </p>
         </div>
       </div>

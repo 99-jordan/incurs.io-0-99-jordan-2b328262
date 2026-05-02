@@ -1,13 +1,16 @@
+import { dirname } from "node:path"
+import { fileURLToPath } from "node:url"
+
+const root = dirname(fileURLToPath(import.meta.url))
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
+  turbopack: {
+    root,
   },
   images: {
     unoptimized: true,
   },
-  // Forcing dev server to bind cleanly after sandbox-level zombie state
-  reactStrictMode: false,
 }
 
 export default nextConfig

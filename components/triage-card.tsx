@@ -16,6 +16,8 @@ import {
   CheckCircle,
   XCircle,
   Brain,
+  Search,
+  Crown,
 } from "lucide-react"
 
 interface TriageCardProps {
@@ -24,6 +26,11 @@ interface TriageCardProps {
 
 export function TriageCard({ result }: TriageCardProps) {
   const [activeTab, setActiveTab] = useState("diagnosis")
+  const scoreRows = Object.entries(result.bottleneckScores ?? {}).map(([key, score]) => ({
+    key,
+    score,
+    label: key.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase()),
+  }))
 
   const getScoreColor = (score: number) => {
     if (score >= 7) return "text-chart-1"
@@ -52,7 +59,7 @@ export function TriageCard({ result }: TriageCardProps) {
               Diagnosis
             </TabsTrigger>
             <TabsTrigger value="action" className="flex-1">
-              Action Plan
+              CEO Move
             </TabsTrigger>
             <TabsTrigger value="resources" className="flex-1">
               Resources
@@ -60,7 +67,6 @@ export function TriageCard({ result }: TriageCardProps) {
           </TabsList>
 
           <TabsContent value="diagnosis" className="space-y-4">
-            {/* Primary findings */}
             <div className="space-y-3">
               <div className="flex items-start gap-3 rounded-md bg-destructive/10 p-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
@@ -93,16 +99,15 @@ export function TriageCard({ result }: TriageCardProps) {
               </div>
             </div>
 
-            {/* Bottleneck scores */}
-            {result.bottleneckScores && result.bottleneckScores.length > 0 && (
+            {scoreRows.length > 0 && (
               <div className="space-y-2 pt-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Bottleneck Map
                 </p>
                 <div className="grid gap-2">
-                  {result.bottleneckScores.map((score) => (
-                    <div key={score.category} className="flex items-center gap-3">
-                      <span className="w-24 text-xs text-muted-foreground">{score.label}</span>
+                  {scoreRows.map((score) => (
+                    <div key={score.key} className="flex items-center gap-3">
+                      <span className="w-36 text-xs text-muted-foreground">{score.label}</span>
                       <div className="h-2 flex-1 rounded-full bg-secondary">
                         <div
                           className={`h-full rounded-full transition-all ${getScoreBarColor(score.score)}`}
@@ -133,10 +138,28 @@ export function TriageCard({ result }: TriageCardProps) {
                 <p className="mt-1 text-sm">{result.riskIfUnchanged}</p>
               </div>
             </div>
+
+            <div className="grid gap-3 pt-2">
+              <div className="rounded-md border border-border bg-secondary/40 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Agent Notes</p>
+                <div className="mt-2 space-y-2 text-sm">
+                  <p><span className="text-muted-foreground">Goal:</span> {result.goalAgentDiagnosis}</p>
+                  <p><span className="text-muted-foreground">Reality:</span> {result.realityAgentDiagnosis}</p>
+                  <p><span className="text-muted-foreground">Skill:</span> {result.skillAgentDiagnosis}</p>
+                </div>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="action" className="space-y-4">
-            {/* 24 hour move */}
+            <div className="rounded-md border border-accent/40 bg-accent/10 p-4">
+              <div className="flex items-center gap-2">
+                <Crown className="h-4 w-4 text-accent" />
+                <p className="text-xs font-medium uppercase tracking-wide text-accent">CEO Final Decision</p>
+              </div>
+              <p className="mt-2 font-medium">{result.ceoFinalDecision}</p>
+            </div>
+
             <div className="rounded-md border border-accent/30 bg-accent/5 p-4">
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-accent" />
@@ -145,7 +168,6 @@ export function TriageCard({ result }: TriageCardProps) {
               <p className="mt-2 font-medium">{result.next24HourMove}</p>
             </div>
 
-            {/* 7 day plan */}
             {result.sevenDayPlan && result.sevenDayPlan.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -164,7 +186,6 @@ export function TriageCard({ result }: TriageCardProps) {
               </div>
             )}
 
-            {/* Message template */}
             {result.messageTemplate && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -179,7 +200,6 @@ export function TriageCard({ result }: TriageCardProps) {
               </div>
             )}
 
-            {/* Proof of action & stop doing */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex items-start gap-3 rounded-md bg-chart-1/10 p-3">
                 <CheckCircle className="mt-0.5 h-4 w-4 text-chart-1" />
@@ -203,6 +223,13 @@ export function TriageCard({ result }: TriageCardProps) {
           </TabsContent>
 
           <TabsContent value="resources" className="space-y-4">
+            <div className="rounded-md border border-border bg-secondary/40 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Resource Agent
+              </p>
+              <p className="mt-1 text-sm">{result.resourceAgentRecommendation}</p>
+            </div>
+
             <div className="space-y-3">
               <div className="flex items-start gap-3 rounded-md bg-secondary p-3">
                 <BookOpen className="mt-0.5 h-4 w-4 text-accent" />
@@ -231,6 +258,16 @@ export function TriageCard({ result }: TriageCardProps) {
                     Event Type
                   </p>
                   <p className="mt-1 text-sm font-medium">{result.recommendedEventType}</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-md bg-secondary p-3">
+                <Search className="mt-0.5 h-4 w-4 text-accent" />
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Deep Dive
+                  </p>
+                  <p className="mt-1 text-sm font-medium">{result.recommendedDeepDive}</p>
                 </div>
               </div>
             </div>

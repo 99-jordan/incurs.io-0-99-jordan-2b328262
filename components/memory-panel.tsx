@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import type { ArmourMemory } from "@/lib/types"
 import {
   Target,
@@ -20,6 +21,10 @@ import {
 
 interface MemoryPanelProps {
   memory: ArmourMemory
+  pendingMemory?: ArmourMemory | null
+  onApproveMemory?: () => void
+  onRejectMemory?: () => void
+  onEditPendingMemory?: (memoryText: string) => void
   onClearMemory: () => void
   collapsed: boolean
   onToggleCollapse: () => void
@@ -39,6 +44,10 @@ const memoryFields = [
 
 export function MemoryPanel({
   memory,
+  pendingMemory,
+  onApproveMemory,
+  onRejectMemory,
+  onEditPendingMemory,
   onClearMemory,
   collapsed,
   onToggleCollapse,
@@ -85,6 +94,32 @@ export function MemoryPanel({
 
       <ScrollArea className="flex-1">
         <div className="space-y-3 p-4">
+          {pendingMemory && (
+            <Card className="border-accent/30 bg-accent/5">
+              <CardHeader className="pb-2 pt-3">
+                <CardTitle className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-accent">
+                  <Brain className="h-3 w-3" />
+                  Memory Update Suggestion
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pb-3 pt-0">
+                <Textarea
+                  value={pendingMemory.lessonLearned || ""}
+                  onChange={(event) => onEditPendingMemory?.(event.target.value)}
+                  className="min-h-24 text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={onApproveMemory} className="flex-1">
+                    Approve
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={onRejectMemory} className="flex-1">
+                    Reject
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {!hasMemory ? (
             <Card className="border-dashed">
               <CardContent className="py-8 text-center">
@@ -137,7 +172,7 @@ export function MemoryPanel({
           <Lock className="mt-0.5 h-3 w-3 text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
             {isMubitActive
-              ? "Long-term memory is stored in Mubit, scoped to your browser session. You can review, edit, or delete memories at any time."
+              ? "incurs.io only stores memories you approve. Live memory is stored in Mubit and scoped to this browser user."
               : "incurs.io only stores memories you choose to save. You can review, edit, or delete memories at any time."}
           </p>
         </div>

@@ -2,12 +2,14 @@ import { streamText, convertToModelMessages, wrapLanguageModel, type UIMessage }
 import { createMistral } from "@ai-sdk/mistral"
 import { mubitMemoryMiddleware } from "@mubit-ai/ai-sdk"
 import { after } from "next/server"
+import { buildDemoTriageResult } from "@/lib/triage-demo"
 
 // Mistral: French company, EU-hosted, GDPR-compliant, no training on API data.
 const mistral = createMistral({
   apiKey: process.env.MISTRAL_API_KEY,
 })
 
+const HAS_MISTRAL = Boolean(process.env.MISTRAL_API_KEY)
 const HAS_MUBIT = Boolean(process.env.MUBIT_API_KEY)
 
 // System prompt that defines the CEO Agent behaviour
@@ -24,22 +26,37 @@ CONVERSATION STYLE:
 - Challenge gently when you sense avoidance or vagueness.
 - Remember and reference what the user has told you across all sessions, not just this one.
 
+TRIAGE AREAS:
+Cover these naturally, one at a time:
+1. Goal clarity
+2. Existing skills and advantages
+3. Weakest skill, behaviour or resource
+4. Available focused hours
+5. Uncomfortable action being avoided
+
+Do not dump all questions at once. During triage, each incurs.io message should usually be one short reflection and one clear question.
+
 DIAGNOSIS FRAMEWORK:
-You are analysing 8 bottleneck dimensions:
-1. Clarity — Do they know exactly what success looks like?
-2. Validation — Have they tested their assumptions with reality?
-3. Capability — Do they have the skills required?
-4. Capacity — Do they have the time, energy, and resources?
-5. Confidence — Do they believe they can do this?
-6. Support — Do they have the right people around them?
-7. Follow-through — Have they historically finished what they started?
-8. Avoidance — Are they avoiding the hardest action?
+Score these bottleneck dimensions from 0 to 10:
+- salesReadiness
+- skillCoverage
+- executionCapacity
+- confidenceUnderPressure
+- marketValidation
+- supportNetwork
+- followThroughRisk
+
+Business goal logic:
+- If the goal mentions company, business, startup, clients, sales, AI, product, agency, software, SaaS or building a company, prioritise sales readiness, market validation, outreach, confidence and execution capacity.
+- If sales ability is weak, make sales readiness the primary bottleneck.
+- If they have not spoken to real buyers, make market validation primary or secondary.
+- If they are overthinking, researching, planning or waiting until ready, name avoidance through planning as the hidden obstacle.
 
 SPECIALIST LENSES:
 - Goal Agent: Is the goal specific, measurable, and genuinely theirs?
 - Reality Agent: What's the actual current state? What have they tried?
 - Skill Agent: What capabilities are missing? What's their learning edge?
-- Resource Agent: Time, money, energy, connections — what's the true constraint?
+- Resource Agent: Recommends one book, one video, one event type and one useful deep dive based on the bottleneck.
 - CEO Agent: You. Make the final call on what matters most.
 
 WHEN READY TO DIAGNOSE:
@@ -52,25 +69,34 @@ After gathering enough context (usually 4-8 exchanges), provide a structured dia
   "hiddenObstacle": "What they're not seeing or admitting",
   "currentAdvantage": "Their strongest asset right now",
   "riskIfUnchanged": "What happens if they don't act",
-  "bottleneckScores": [
-    {"category": "clarity", "score": 7, "label": "Clarity", "description": "Assessment"},
-    {"category": "validation", "score": 4, "label": "Validation", "description": "Assessment"},
-    {"category": "capability", "score": 6, "label": "Capability", "description": "Assessment"},
-    {"category": "capacity", "score": 5, "label": "Capacity", "description": "Assessment"},
-    {"category": "confidence", "score": 8, "label": "Confidence", "description": "Assessment"},
-    {"category": "support", "score": 6, "label": "Support", "description": "Assessment"},
-    {"category": "follow_through", "score": 5, "label": "Follow-through", "description": "Assessment"},
-    {"category": "avoidance", "score": 3, "label": "Avoidance", "description": "Assessment"}
-  ],
+  "bottleneckScores": {
+    "salesReadiness": 3,
+    "skillCoverage": 6,
+    "executionCapacity": 7,
+    "confidenceUnderPressure": 4,
+    "marketValidation": 2,
+    "supportNetwork": 5,
+    "followThroughRisk": 6
+  },
+  "goalAgentDiagnosis": "Specialist input",
+  "realityAgentDiagnosis": "Specialist input",
+  "skillAgentDiagnosis": "Specialist input",
+  "resourceAgentRecommendation": "Specialist input",
+  "ceoFinalDecision": "The direct decision",
   "next24HourMove": "One specific action they can do tomorrow",
-  "sevenDayPlan": ["Day 1-2 action", "Day 3-4 action", "Day 5-7 action"],
+  "sevenDayPlan": ["Day 1 action", "Day 2 action", "Day 3 action", "Day 4 action", "Day 5 action", "Day 6 action", "Day 7 action"],
   "recommendedBook": "One book that addresses their specific bottleneck",
   "recommendedVideo": "One video or talk that would help",
   "recommendedEventType": "Type of event they should attend",
+  "recommendedDeepDive": "One useful guide, essay or teardown",
   "messageTemplate": "Exact message they can send to someone to take action",
   "proofOfAction": "What evidence they should send you to prove they did it",
   "stopDoing": "One thing they should stop doing immediately",
-  "memoryUpdate": "What should be remembered about this user for future sessions — write as a clear lesson, e.g. 'User repeatedly stalls when sales calls are required; their advantage is technical depth.'"
+  "memoryUpdateSuggestion": "What the user can approve for Armour Memory",
+  "nextCheckInQuestion": "The next question to ask later",
+  "memoryMode": "live",
+  "intelMode": "demo",
+  "aiMode": "live"
 }
 </triage>
 
@@ -83,7 +109,45 @@ export const maxDuration = 60
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { messages, userId, chatId }: { messages: UIMessage[]; userId?: string; chatId?: string } = body
+    const {
+      messages,
+      userId,
+      chatId,
+      goal,
+      answers,
+      localArea,
+    }: {
+      messages?: UIMessage[]
+      userId?: string
+      chatId?: string
+      goal?: string
+      answers?: string[]
+      localArea?: string
+    } = body
+
+    if (!HAS_MISTRAL) {
+      return Response.json(
+        buildDemoTriageResult({
+          goal,
+          answers,
+          messages,
+          localArea,
+        }),
+        {
+          headers: {
+            "x-incurs-ai": "demo",
+            "x-incurs-memory": "session-only",
+          },
+        },
+      )
+    }
+
+    if (!messages) {
+      return Response.json(
+        { error: "messages are required for live conversational triage" },
+        { status: 400 },
+      )
+    }
 
     // Per-user memory scope. Same user across multiple chats shares one memory base.
     const sessionId = userId || "incurs-demo-user"
@@ -109,7 +173,7 @@ export async function POST(req: Request) {
             scheduleIngest: (task) => after(task()),
             // Don't crash the chat if Mubit is briefly unavailable
             failOpen: true,
-          }),
+          }) as unknown as Parameters<typeof wrapLanguageModel>[0]["middleware"],
         })
       : baseModel
 
@@ -126,6 +190,7 @@ export async function POST(req: Request) {
 
     return result.toUIMessageStreamResponse({
       headers: {
+        "x-incurs-ai": "live",
         "x-incurs-memory": HAS_MUBIT ? "mubit" : "session-only",
         "x-incurs-session": sessionId,
         ...(chatId ? { "x-incurs-chat": chatId } : {}),
@@ -143,7 +208,10 @@ export async function POST(req: Request) {
 // Public health check so the client can show a "Memory active" badge
 export async function GET() {
   return Response.json({
+    ai: HAS_MISTRAL ? "mistral" : "demo",
     memory: HAS_MUBIT ? "mubit" : "session-only",
+    intel: process.env.BRIGHTDATA_API_KEY ? "live" : "demo",
+    cron: process.env.CRON_SECRET ? "enabled" : "manual-only",
     model: "mistral-large-latest",
     region: "eu",
   })

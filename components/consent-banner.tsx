@@ -54,7 +54,7 @@ export function ConsentBanner({ onAccept, onDecline }: ConsentBannerProps) {
 
         <CardContent className="space-y-3 pb-3">
           <p className="text-xs text-muted-foreground">
-            We use AI to analyse your goals. Your data is stored locally on your device.
+            We use AI to analyse your goals. Conversations are stored locally; durable memory is only saved when you approve it.
           </p>
 
           {showDetails ? (

@@ -53,7 +53,7 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold">4. Data Storage and Security</h2>
             <div className="space-y-4 text-muted-foreground">
               <p><strong className="text-foreground">Local Storage:</strong> Your conversation history and preferences are stored locally on your device using browser localStorage.</p>
-              <p><strong className="text-foreground">AI Processing:</strong> Messages are sent to AI providers (OpenAI) for processing. We do not store your messages on our servers beyond what is necessary for real-time processing.</p>
+              <p><strong className="text-foreground">AI Processing:</strong> Messages are sent to Mistral AI for processing when live AI is enabled. If keys are missing, incurs.io uses local demo logic instead.</p>
               <p><strong className="text-foreground">No Third-Party Sharing:</strong> We do not sell or share your personal data with third parties for marketing purposes.</p>
             </div>
           </section>
@@ -82,10 +82,10 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold">7. AI Processing</h2>
             <div className="space-y-4 text-muted-foreground">
               <p>
-                Your messages are processed by AI models (currently OpenAI GPT-4) to generate diagnoses and recommendations. This processing is essential to provide the core functionality of incurs.io.
+                Your messages are processed by Mistral AI models to generate diagnoses and recommendations when live AI is enabled. Provider calls stay server side, and API keys are never exposed to the browser.
               </p>
               <p>
-                AI processing is covered by OpenAI&apos;s data processing agreement. Your conversations are not used to train AI models when processed through the Vercel AI Gateway.
+                Armour Memory is optional. incurs.io only saves durable memory updates that you approve, edit, or reject in the app.
               </p>
             </div>
           </section>
