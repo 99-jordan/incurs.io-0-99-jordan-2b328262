@@ -5,6 +5,9 @@ import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, UIMessage } from "ai"
 import type { Chat, Message, ArmourMemory } from "@/lib/types"
 import { getChats, saveChats, createChat, updateChatTitle, getMemory, saveMemory, clearMemory } from "@/lib/chat-store"
+import { getConsent, saveConsent, hasValidConsent, enforceDataRetention, type GDPRConsent } from "@/lib/gdpr"
+import { ConsentBanner } from "@/components/consent-banner"
+import { PrivacySettings } from "@/components/privacy-settings"
 import { ChatSidebar } from "@/components/chat-sidebar"
 import { ChatArea } from "@/components/chat-area"
 import { ChatInput } from "@/components/chat-input"
@@ -46,6 +49,9 @@ export default function Home() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [memoryCollapsed, setMemoryCollapsed] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [consent, setConsent] = useState<GDPRConsent | null>(null)
+  const [showConsentBanner, setShowConsentBanner] = useState(false)
+  const [showPrivacySettings, setShowPrivacySettings] = useState(false)
 
   const currentChat = chats.find((c) => c.id === currentChatId)
 
@@ -124,8 +130,31 @@ export default function Home() {
   // Load chats and memory on mount
   useEffect(() => {
     setMounted(true)
+    
+    // Check GDPR consent first
+    const storedConsent = getConsent()
+    setConsent(storedConsent)
+    
+    if (!hasValidConsent()) {
+      setShowConsentBanner(true)
+      return
+    }
+    
+    // Enforce data retention policy (90 days)
+    enforceDataRetention(90)
+    
     const loadedChats = getChats()
-    const loadedMemory = getMemory()
+    const loadedMemory = storedConsent?.memoryStorage ? getMemory() : {
+      knownGoal: null,
+      repeatedBottleneck: null,
+      currentAdvantage: null,
+      currentRisk: null,
+      lastCommitment: null,
+      proofOfAction: null,
+      lessonLearned: null,
+      nextCheckInQuestion: null,
+      updatedAt: null,
+    }
     setChats(loadedChats)
     setMemory(loadedMemory)
 
