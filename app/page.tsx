@@ -299,12 +299,6 @@ export default function Home() {
     setShowConsentBanner(true)
   }, [])
 
-  const streamingContent = useMemo(() => {
-    if (!isLoading || messages.length === 0) return ""
-    const last = messages[messages.length - 1]
-    return last.role === "assistant" ? getUIMessageText(last) : ""
-  }, [isLoading, messages])
-
   const displayMessages: Message[] = useMemo(() => messages.map(uiMessageToMessage), [messages])
 
   return (
@@ -333,7 +327,7 @@ export default function Home() {
           />
 
         <div className="flex flex-1 flex-col">
-          <ChatArea messages={displayMessages} isLoading={isLoading} streamingContent={streamingContent} />
+          <ChatArea messages={displayMessages} isLoading={isLoading} />
           <ChatInput onSend={handleSendMessage} onStop={stop} isLoading={isLoading} />
         </div>
 

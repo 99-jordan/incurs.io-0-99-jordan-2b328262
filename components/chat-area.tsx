@@ -9,15 +9,14 @@ import { Brain, Zap, Target, Shield, Sparkles } from "lucide-react"
 interface ChatAreaProps {
   messages: Message[]
   isLoading: boolean
-  streamingContent: string
 }
 
-export function ChatArea({ messages, isLoading, streamingContent }: ChatAreaProps) {
+export function ChatArea({ messages, isLoading }: ChatAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, streamingContent])
+  }, [messages])
 
   if (messages.length === 0) {
     return (
@@ -82,6 +81,13 @@ export function ChatArea({ messages, isLoading, streamingContent }: ChatAreaProp
     )
   }
 
+  // Only show "thinking" indicator when waiting for the assistant's first delta —
+  // i.e. the last message is still from the user. Once the assistant starts
+  // streaming, its partial text is already rendered inside the last ChatMessage,
+  // so we MUST NOT render a second bubble or text appears twice.
+  const lastMessage = messages[messages.length - 1]
+  const isWaitingForReply = isLoading && (!lastMessage || lastMessage.role === "user")
+
   return (
     <ScrollArea className="flex-1">
       <div className="mx-auto max-w-3xl px-4 py-6">
@@ -89,18 +95,7 @@ export function ChatArea({ messages, isLoading, streamingContent }: ChatAreaProp
           <ChatMessage key={message.id} message={message} />
         ))}
 
-        {isLoading && streamingContent && (
-          <div className="flex gap-4 py-6">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
-              <Brain className="h-4 w-4" />
-            </div>
-            <div className="flex-1">
-              <div className="rounded-lg bg-secondary px-4 py-3 text-sm leading-relaxed">{streamingContent}</div>
-            </div>
-          </div>
-        )}
-
-        {isLoading && !streamingContent && (
+        {isWaitingForReply && (
           <div className="flex gap-4 py-6">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
               <Brain className="h-4 w-4 animate-pulse" />
