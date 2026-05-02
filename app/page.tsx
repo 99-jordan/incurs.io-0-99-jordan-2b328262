@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport, UIMessage } from "ai"
+import { DefaultChatTransport, type UIMessage } from "ai"
 import type { Chat, Message, ArmourMemory } from "@/lib/types"
 import { getChats, saveChats, createChat, updateChatTitle, getMemory, saveMemory, clearMemory } from "@/lib/chat-store"
 import { getOrCreateUserId } from "@/lib/user-id"
@@ -14,7 +14,28 @@ import { ChatArea } from "@/components/chat-area"
 import { ChatInput } from "@/components/chat-input"
 import { MemoryPanel } from "@/components/memory-panel"
 
-// Helper to extract text from UIMessage parts
+const EMPTY_MEMORY: ArmourMemory = {
+  knownGoal: null,
+  repeatedBottleneck: null,
+  currentAdvantage: null,
+  currentRisk: null,
+  lastCommitment: null,
+  proofOfAction: null,
+  lessonLearned: null,
+  nextCheckInQuestion: null,
+  updatedAt: null,
+}
+
+// Convert a stored Message to AI SDK 6 UIMessage shape
+function messageToUIMessage(msg: Message): UIMessage {
+  return {
+    id: msg.id,
+    role: msg.role,
+    parts: [{ type: "text", text: msg.content }],
+  } as UIMessage
+}
+
+// Extract plain text from a UIMessage's parts array
 function getUIMessageText(msg: UIMessage): string {
   if (!msg.parts || !Array.isArray(msg.parts)) return ""
   return msg.parts
@@ -23,7 +44,6 @@ function getUIMessageText(msg: UIMessage): string {
     .join("")
 }
 
-// Convert UIMessage to our Message format
 function uiMessageToMessage(msg: UIMessage): Message {
   return {
     id: msg.id,
@@ -36,27 +56,20 @@ function uiMessageToMessage(msg: UIMessage): Message {
 export default function Home() {
   const [chats, setChats] = useState<Chat[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
-  const [memory, setMemory] = useState<ArmourMemory>({
-    knownGoal: null,
-    repeatedBottleneck: null,
-    currentAdvantage: null,
-    currentRisk: null,
-    lastCommitment: null,
-    proofOfAction: null,
-    lessonLearned: null,
-    nextCheckInQuestion: null,
-    updatedAt: null,
-  })
+  const [memory, setMemory] = useState<ArmourMemory>(EMPTY_MEMORY)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [memoryCollapsed, setMemoryCollapsed] = useState(true)
   const [consent, setConsent] = useState<GDPRConsent | null>(null)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
-  const [userId, setUserId] = useState<string | null>(null)
   const [memoryBackend, setMemoryBackend] = useState<"mubit" | "session-only" | "unknown">("unknown")
 
-  // Create transport that attaches userId + chatId to every request so
-  // Mubit can scope long-term memory to this specific browser/user.
+  // Stable refs so the transport never has to be recreated.
+  const userIdRef = useRef<string>("incurs-demo-user")
+  const lastLoadedChatRef = useRef<string | null>(null)
+
+  // Transport is created exactly once. It reads userId from the ref each request,
+  // so a userId change after mount never tears down an in-flight stream.
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -65,86 +78,110 @@ export default function Home() {
           body: {
             messages,
             chatId: id,
-            userId: userId ?? "incurs-demo-user",
+            userId: userIdRef.current,
           },
         }),
       }),
-    [userId]
+    [],
   )
 
-  // AI chat hook with AI SDK 6 patterns
-  const { messages, status, sendMessage, stop } = useChat({
-    id: currentChatId || undefined,
-    transport,
-  })
+  // Persist a fully-completed chat to localStorage once streaming finishes.
+  const persistChat = useCallback((chatId: string, finalMessages: UIMessage[]) => {
+    const converted = finalMessages.map(uiMessageToMessage)
+    setChats((prev) => {
+      const updated = prev.map((c) =>
+        c.id === chatId
+          ? {
+              ...c,
+              messages: converted,
+              title: updateChatTitle({ ...c, messages: converted }),
+              updatedAt: new Date(),
+            }
+          : c,
+      )
+      saveChats(updated)
+      return updated
+    })
 
-  const isLoading = status === "streaming" || status === "submitted"
-
-  // Extract memory from triage results
-  const extractAndSaveMemory = useCallback((content: string) => {
-    const triageMatch = content.match(/<triage>([\s\S]*?)<\/triage>/)
-    if (triageMatch) {
-      try {
-        const triageData = JSON.parse(triageMatch[1])
-        setMemory((prev) => {
-          const newMemory: ArmourMemory = {
-            ...prev,
-            knownGoal: triageData.primaryBottleneck ? prev.knownGoal : null,
-            repeatedBottleneck: triageData.primaryBottleneck || prev.repeatedBottleneck,
-            currentAdvantage: triageData.currentAdvantage || prev.currentAdvantage,
-            currentRisk: triageData.riskIfUnchanged || prev.currentRisk,
-            lastCommitment: triageData.next24HourMove || prev.lastCommitment,
-            proofOfAction: triageData.proofOfAction || prev.proofOfAction,
-            lessonLearned: triageData.memoryUpdate || prev.lessonLearned,
-            nextCheckInQuestion: "Did you complete your 24-hour move?",
-            updatedAt: new Date(),
-          }
-          saveMemory(newMemory)
-          return newMemory
-        })
-      } catch {
-        // Ignore parsing errors
+    // Extract structured triage memory from the final assistant message
+    const lastAssistant = [...finalMessages].reverse().find((m) => m.role === "assistant")
+    if (lastAssistant) {
+      const text = getUIMessageText(lastAssistant)
+      const triageMatch = text.match(/<triage>([\s\S]*?)<\/triage>/)
+      if (triageMatch) {
+        try {
+          const t = JSON.parse(triageMatch[1])
+          setMemory((prev) => {
+            const next: ArmourMemory = {
+              knownGoal: prev.knownGoal,
+              repeatedBottleneck: t.primaryBottleneck || prev.repeatedBottleneck,
+              currentAdvantage: t.currentAdvantage || prev.currentAdvantage,
+              currentRisk: t.riskIfUnchanged || prev.currentRisk,
+              lastCommitment: t.next24HourMove || prev.lastCommitment,
+              proofOfAction: t.proofOfAction || prev.proofOfAction,
+              lessonLearned: t.memoryUpdate || prev.lessonLearned,
+              nextCheckInQuestion: "Did you complete your 24-hour move?",
+              updatedAt: new Date(),
+            }
+            saveMemory(next)
+            return next
+          })
+        } catch {
+          // ignore malformed triage block
+        }
       }
     }
   }, [])
 
-  // Sync messages to chat when they change
+  // AI SDK chat hook. Note: id changes RESET internal messages — that's why we
+  // re-seed history with setMessages in the effect below.
+  const { messages, status, sendMessage, stop, setMessages } = useChat({
+    id: currentChatId || undefined,
+    transport,
+    onFinish: ({ messages: finalMessages }) => {
+      if (currentChatId) persistChat(currentChatId, finalMessages)
+    },
+  })
+
+  const isLoading = status === "streaming" || status === "submitted"
+
+  // Re-seed useChat with stored messages whenever the active chat changes.
+  // Only seeds once per chatId switch, so streaming deltas aren't overwritten.
   useEffect(() => {
-    if (currentChatId && messages.length > 0) {
-      const convertedMessages = messages.map(uiMessageToMessage)
-      
-      setChats((prev) => {
-        const updated = prev.map((chat) => {
-          if (chat.id === currentChatId) {
-            return {
-              ...chat,
-              messages: convertedMessages,
-              title: updateChatTitle({ ...chat, messages: convertedMessages }),
-              updatedAt: new Date(),
-            }
-          }
-          return chat
-        })
-        saveChats(updated)
-        return updated
-      })
+    if (!currentChatId) return
+    if (lastLoadedChatRef.current === currentChatId) return
+    lastLoadedChatRef.current = currentChatId
 
-      // Check for memory updates in the last assistant message
-      const lastMessage = messages[messages.length - 1]
-      if (lastMessage?.role === "assistant") {
-        const content = getUIMessageText(lastMessage)
-        extractAndSaveMemory(content)
-      }
+    const chat = chats.find((c) => c.id === currentChatId)
+    if (chat && chat.messages.length > 0) {
+      setMessages(chat.messages.map(messageToUIMessage))
+    } else {
+      setMessages([])
     }
-  }, [messages, currentChatId, extractAndSaveMemory])
+  }, [currentChatId, chats, setMessages])
 
-  // Load chats and memory on mount
+  // Update sidebar title as soon as the user sends their first message
+  // (don't wait for the assistant to finish streaming).
+  useEffect(() => {
+    if (!currentChatId) return
+    const userMsgs = messages.filter((m) => m.role === "user")
+    if (userMsgs.length === 0) return
+
+    setChats((prev) => {
+      const chat = prev.find((c) => c.id === currentChatId)
+      if (!chat) return prev
+      const draft = { ...chat, messages: messages.map(uiMessageToMessage) }
+      const newTitle = updateChatTitle(draft)
+      if (chat.title === newTitle) return prev
+      return prev.map((c) => (c.id === currentChatId ? { ...c, title: newTitle, updatedAt: new Date() } : c))
+    })
+  }, [messages, currentChatId])
+
+  // Mount: hydrate everything.
   useEffect(() => {
     try {
-      // Stable per-browser user id so Mubit can build long-term memory
-      setUserId(getOrCreateUserId())
+      userIdRef.current = getOrCreateUserId()
 
-      // Check which memory backend is active server-side
       fetch("/api/triage", { method: "GET" })
         .then((r) => r.json())
         .then((info) => {
@@ -154,26 +191,19 @@ export default function Home() {
         })
         .catch(() => setMemoryBackend("session-only"))
 
-      // Check GDPR consent
       const storedConsent = getConsent()
       setConsent(storedConsent)
+      if (!hasValidConsent()) setShowConsentBanner(true)
 
-      // Show banner if no valid consent (but don't block app)
-      if (!hasValidConsent()) {
-        setShowConsentBanner(true)
-      }
-
-      // Always load data and ensure there's a current chat
       enforceDataRetention(90)
 
       const loadedChats = getChats()
       const loadedMemory = (storedConsent?.memoryStorage ?? true) ? getMemory() : null
       if (loadedMemory) setMemory(loadedMemory)
 
-      // Always ensure there's a current chat to prevent useChat id race condition
       if (loadedChats.length > 0) {
         const sorted = [...loadedChats].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-        setChats(loadedChats)
+        setChats(sorted)
         setCurrentChatId(sorted[0].id)
       } else {
         const initialChat = createChat()
@@ -183,7 +213,6 @@ export default function Home() {
       }
     } catch (err) {
       console.error("[v0] Mount error:", err)
-      // Fallback: create a fresh chat so the app is at least usable
       const initialChat = createChat()
       setChats([initialChat])
       setCurrentChatId(initialChat.id)
@@ -208,46 +237,30 @@ export default function Home() {
     (chatId: string) => {
       setChats((prev) => {
         const updated = prev.filter((c) => c.id !== chatId)
-        // Ensure we always have at least one chat
         if (updated.length === 0) {
           const fresh = createChat()
           saveChats([fresh])
-          if (currentChatId === chatId) {
-            setCurrentChatId(fresh.id)
-          }
+          if (currentChatId === chatId) setCurrentChatId(fresh.id)
           return [fresh]
         }
         saveChats(updated)
-        if (currentChatId === chatId) {
-          setCurrentChatId(updated[0].id)
-        }
+        if (currentChatId === chatId) setCurrentChatId(updated[0].id)
         return updated
       })
     },
-    [currentChatId]
+    [currentChatId],
   )
 
   const handleSendMessage = useCallback(
     (content: string) => {
-      // currentChatId is always set thanks to mount logic - just send
       sendMessage({ text: content })
     },
-    [sendMessage]
+    [sendMessage],
   )
 
   const handleClearMemory = useCallback(() => {
     clearMemory()
-    setMemory({
-      knownGoal: null,
-      repeatedBottleneck: null,
-      currentAdvantage: null,
-      currentRisk: null,
-      lastCommitment: null,
-      proofOfAction: null,
-      lessonLearned: null,
-      nextCheckInQuestion: null,
-      updatedAt: null,
-    })
+    setMemory(EMPTY_MEMORY)
   }, [])
 
   const handleAcceptConsent = useCallback((newConsent: GDPRConsent) => {
@@ -257,12 +270,11 @@ export default function Home() {
   }, [])
 
   const handleDeclineConsent = useCallback(() => {
-    // User declined - accept minimal consent (essential only)
     const minimalConsent: GDPRConsent = {
       version: "1.0",
       essential: true,
       analytics: false,
-      aiProcessing: true, // Required for app to work
+      aiProcessing: true,
       memoryStorage: false,
       timestamp: new Date(),
     }
@@ -272,49 +284,26 @@ export default function Home() {
   }, [])
 
   const handleDataDeleted = useCallback(() => {
-    // Ensure we always have a current chat
     const fresh = createChat()
     setChats([fresh])
     setCurrentChatId(fresh.id)
     saveChats([fresh])
-    setMemory({
-      knownGoal: null,
-      repeatedBottleneck: null,
-      currentAdvantage: null,
-      currentRisk: null,
-      lastCommitment: null,
-      proofOfAction: null,
-      lessonLearned: null,
-      nextCheckInQuestion: null,
-      updatedAt: null,
-    })
+    setMemory(EMPTY_MEMORY)
     setShowConsentBanner(true)
   }, [])
 
-  // Get streaming content from the last assistant message if loading
   const streamingContent = useMemo(() => {
-    if (isLoading && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1]
-      if (lastMessage.role === "assistant") {
-        return getUIMessageText(lastMessage)
-      }
-    }
-    return ""
+    if (!isLoading || messages.length === 0) return ""
+    const last = messages[messages.length - 1]
+    return last.role === "assistant" ? getUIMessageText(last) : ""
   }, [isLoading, messages])
 
-  // Convert UIMessages to our Message format for display
-  const displayMessages: Message[] = useMemo(() => {
-    return messages.map(uiMessageToMessage)
-  }, [messages])
+  const displayMessages: Message[] = useMemo(() => messages.map(uiMessageToMessage), [messages])
 
   return (
     <>
-      {/* GDPR Consent Banner - overlay on top */}
-      {showConsentBanner && (
-        <ConsentBanner onAccept={handleAcceptConsent} onDecline={handleDeclineConsent} />
-      )}
+      {showConsentBanner && <ConsentBanner onAccept={handleAcceptConsent} onDecline={handleDeclineConsent} />}
 
-      {/* Privacy Settings Dialog */}
       <PrivacySettings
         open={showPrivacySettings}
         onOpenChange={setShowPrivacySettings}
@@ -323,9 +312,7 @@ export default function Home() {
         onDataDeleted={handleDataDeleted}
       />
 
-      {/* Main App - always render, consent banner is an overlay */}
       <div className="flex h-screen bg-background">
-        {/* Sidebar */}
         <ChatSidebar
           chats={chats}
           currentChatId={currentChatId}
@@ -337,13 +324,11 @@ export default function Home() {
           onOpenPrivacySettings={() => setShowPrivacySettings(true)}
         />
 
-        {/* Main Chat Area */}
         <div className="flex flex-1 flex-col">
           <ChatArea messages={displayMessages} isLoading={isLoading} streamingContent={streamingContent} />
           <ChatInput onSend={handleSendMessage} onStop={stop} isLoading={isLoading} />
         </div>
 
-        {/* Memory Panel */}
         <MemoryPanel
           memory={memory}
           onClearMemory={handleClearMemory}
